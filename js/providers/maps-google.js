@@ -134,7 +134,7 @@ export async function computeRoute({ origin, destination, waypoints = [] }) {
     destination: wp(destination),
     intermediates: waypoints.map(wp),
     travelMode: "DRIVING",
-    fields: ["path", "distanceMeters", "duration"],
+    fields: ["path", "distanceMeters", "durationMillis"],
   });
 
   const route = result.routes?.[0];
@@ -147,21 +147,9 @@ export async function computeRoute({ origin, destination, waypoints = [] }) {
 
   return {
     distanceMeters: route.distanceMeters || 0,
-    durationSeconds: toSeconds(route.duration),
+    durationSeconds: Math.round((route.durationMillis || 0) / 1000),
     path,
   };
-}
-
-// Route duration can come back as a number, a "3600s" string, or an object.
-function toSeconds(d) {
-  if (d == null) return 0;
-  if (typeof d === "number") return d;
-  if (typeof d === "string") return parseInt(d, 10) || 0;
-  if (typeof d === "object") {
-    if (typeof d.seconds === "number") return d.seconds;
-    if (typeof d.value === "number") return d.value;
-  }
-  return 0;
 }
 
 // Draw the amber dashed "route" polyline + pins. Returns a cleanup handle.
