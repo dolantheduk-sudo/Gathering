@@ -9,7 +9,7 @@ export const config = {
   //    Enable: "Maps JavaScript API" + "Places API (New)".
   //    Restrict the key by HTTP referrer to your GitHub Pages URL.
   //    Leave blank to run the app in "no-map setup" mode.
-  GOOGLE_MAPS_API_KEY: "",
+  GOOGLE_MAPS_API_KEY: "AIzaSyB3pM_8Y1PAMY7x-dsORK7XkPvsNmdDlp4",
 
   // 2) Where the map opens before a trip is loaded (Erie, PA by default).
   DEFAULT_CENTER: { lat: 42.1292, lng: -80.0851 },
