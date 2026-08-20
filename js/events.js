@@ -129,5 +129,17 @@ export function migrateStop(s) {
     tags: Array.isArray(s.tags) ? s.tags : [],
     stayMin: s.stayMin != null ? s.stayMin : null,
     cost: s.cost != null ? s.cost : null,
+    addedBy: s.addedBy || null,
+    surprise: !!s.surprise,
+    reactions: s.reactions && typeof s.reactions === "object" ? s.reactions : {},
+    comments: Array.isArray(s.comments) ? s.comments : [],
   };
+}
+
+// Emoji reaction set for stops.
+export const REACTIONS = ["👍", "❤️", "🔥", "😋", "👎"];
+
+// Should `viewer` (a display name) see this stop's real details?
+export function canSeeStop(stop, viewer) {
+  return !stop.surprise || !stop.addedBy || stop.addedBy === viewer;
 }

@@ -36,6 +36,7 @@ function normalize(t) {
     dayStart: t.dayStart || "09:00",
     legs: Array.isArray(t.legs) ? t.legs : [],
     jar: t.jar || { goal: 0, contributions: [] },
+    checklist: Array.isArray(t.checklist) ? t.checklist : [],
     stops: (t.stops || []).map(migrateStop),
   };
 }
@@ -167,6 +168,43 @@ export function jarTotals(trip) {
   const byMember = {};
   c.forEach((x) => (byMember[x.member] = (byMember[x.member] || 0) + x.amount));
   return { saved, goal, remaining: Math.max(goal - saved, 0), byMember };
+}
+
+// ── Stop social: reactions + comments ────────────────────────
+export function reactToStop(tripId, stopId, emoji, me) {
+  const t = getTrip(tripId); if (!t) return;
+  const s = t.stops.find((x) => x.id === stopId); if (!s) return;
+  s.reactions = s.reactions || {};
+  const arr = s.reactions[emoji] || [];
+  s.reactions[emoji] = arr.includes(me) ? arr.filter((m) => m !== me) : [...arr, me];
+  if (!s.reactions[emoji].length) delete s.reactions[emoji];
+  return saveTrip(t);
+}
+export function commentOnStop(tripId, stopId, by, text) {
+  const t = getTrip(tripId); if (!t) return;
+  const s = t.stops.find((x) => x.id === stopId); if (!s) return;
+  s.comments = s.comments || [];
+  s.comments.push({ id: uid(), by, text, at: now() });
+  return saveTrip(t);
+}
+
+// ── Trip checklist ───────────────────────────────────────────
+export function addChecklistItem(tripId, text, by) {
+  const t = getTrip(tripId); if (!t) return;
+  t.checklist = t.checklist || [];
+  t.checklist.push({ id: uid(), text, done: false, by, at: now() });
+  return saveTrip(t);
+}
+export function toggleChecklistItem(tripId, itemId) {
+  const t = getTrip(tripId); if (!t) return;
+  const it = (t.checklist || []).find((x) => x.id === itemId);
+  if (it) it.done = !it.done;
+  return saveTrip(t);
+}
+export function removeChecklistItem(tripId, itemId) {
+  const t = getTrip(tripId); if (!t) return;
+  t.checklist = (t.checklist || []).filter((x) => x.id !== itemId);
+  return saveTrip(t);
 }
 
 // ── Change subscription (realtime or cross-tab) ──────────────

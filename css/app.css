@@ -442,3 +442,42 @@ body {
   padding: .2rem .55rem; border-radius: 999px;
 }
 .code-chip b { letter-spacing: .1em; font-weight: 700; }
+
+/* ── Batch 1: attribution, surprise, reactions, comments, checklist ── */
+.ev__by { font-size: .74rem; color: var(--slate); }
+.mini--check { flex-direction: row; align-items: center; gap: .3rem; cursor: pointer; }
+.mini--check input { width: auto; }
+
+/* Surprise stops */
+.ev--surprise .ev__pin, .ev--mine-surprise .ev__pin { background: #f3e9fc; border-color: var(--purple); }
+.ev--surprise .ev__name { color: var(--purple); font-style: italic; }
+
+/* Reactions */
+.ev__rx { display: flex; gap: .3rem; margin-top: .5rem; flex-wrap: wrap; }
+.rx { display: inline-flex; align-items: center; gap: .2rem; font-size: .9rem; line-height: 1; padding: .2rem .45rem; border: 1px solid var(--line); border-radius: 999px; background: var(--card); cursor: pointer; transition: transform .08s ease; }
+.rx:hover { transform: scale(1.12); }
+.rx.is-on { background: color-mix(in srgb, var(--blue) 12%, white); border-color: var(--blue); }
+.rx span { font-family: var(--mono); font-size: .7rem; font-weight: 700; color: var(--slate); }
+.rx.is-on span { color: var(--blue); }
+
+/* Comments */
+.ev__cmts { margin-top: .5rem; display: flex; flex-direction: column; gap: .3rem; }
+.cmt { font-size: .84rem; color: var(--ink); background: var(--paper); border-radius: 8px; padding: .3rem .5rem; }
+.cmt b { color: var(--pine-deep); }
+.cmt-add { display: flex; gap: .4rem; margin-top: .45rem; }
+.cmt-in { flex: 1; min-width: 0; font-size: .82rem; padding: .3rem .5rem; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.cmt-in:focus { outline: none; border-color: var(--pine); }
+
+/* Detail side column holds jar + checklist */
+.detail__side { display: flex; flex-direction: column; gap: 1.2rem; }
+.detail__side .jar { position: static; }
+
+/* Checklist */
+.checklist .chk { list-style: none; margin: .3rem 0 1rem; padding: 0; display: flex; flex-direction: column; gap: .35rem; }
+.chk__i { display: flex; align-items: center; gap: .5rem; font-size: .9rem; }
+.chk__i label { display: flex; align-items: center; gap: .5rem; flex: 1; cursor: pointer; }
+.chk__i input { accent-color: var(--pine); }
+.chk__i.is-done span { text-decoration: line-through; color: var(--slate); }
+.chk__i .icon { margin-left: auto; opacity: .5; }
+.chk__i:hover .icon { opacity: 1; }
+.chk__empty { font-size: .84rem; color: var(--slate); }

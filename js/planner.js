@@ -89,7 +89,11 @@ function addStop(root) {
   slot.querySelectorAll("[data-pcat]").forEach((b) =>
     b.onclick = () => { pendingCategory = b.dataset.pcat; slot.querySelectorAll("[data-pcat]").forEach((x) => x.classList.toggle("is-on", x.dataset.pcat === pendingCategory)); });
   maps.createAutocomplete(slot.querySelector("#adder-ac"), (pt) => {
-    trip.stops.push({ id: store.uid(), ...pt, notes: "", category: pendingCategory, tags: [], stayMin: null, cost: null });
+    trip.stops.push({
+      id: store.uid(), ...pt, notes: "", category: pendingCategory,
+      tags: [], stayMin: null, cost: null,
+      addedBy: store.getSession().me, surprise: false, reactions: {}, comments: [],
+    });
     slot.replaceChildren();
     renderTimeline(root); recompute();
   });
@@ -143,6 +147,26 @@ function renderItem(pt) {
   }
 
   const s = pt.stop;
+  const me = store.getSession().me;
+
+  // Surprise stop added by someone else: show a placeholder you can still
+  // reorder or delete, but whose details stay hidden.
+  if (s.surprise && s.addedBy && s.addedBy !== me) {
+    return `
+      <li class="ev ev--surprise" data-id="${s.id}">
+        <button class="ev__pin ev__focus" data-focus="${s.id}" title="Surprise">🎁</button>
+        <div class="ev__main">
+          <div class="ev__top">
+            <button class="ev__drag" aria-label="Drag to reorder" title="Drag to reorder">⠿</button>
+            <span class="ev__name">Surprise stop</span>
+            <span class="ev__eta">${fmtTime(pt.etaMin)}</span>
+            <span class="ev__acts"><button class="icon" data-remove="${s.id}" aria-label="Remove">✕</button></span>
+          </div>
+          <p class="ev__line">🎁 Hidden — added by ${escapeHtml(s.addedBy)}</p>
+        </div>
+      </li>`;
+  }
+
   const cat = s.category || "sight";
   const def = catDef(cat);
   const stay = s.stayMin != null ? s.stayMin : defaultStay(cat);
@@ -167,6 +191,7 @@ function renderItem(pt) {
         <div class="ev__meta">
           <label class="mini">stay <input type="number" min="0" step="15" data-stay="${s.id}" value="${stay}"> min</label>
           <label class="mini">$<input type="number" min="0" step="1" data-cost="${s.id}" value="${s.cost ?? ""}" placeholder="cost"></label>
+          <label class="mini mini--check"><input type="checkbox" data-surprise="${s.id}" ${s.surprise ? "checked" : ""}> 🎁 Surprise</label>
         </div>
         <div class="ev__tags">${tags}</div>
         <input class="ev__notes" data-notes="${s.id}" placeholder="Add a note…" value="${escapeHtml(s.notes || "")}">
@@ -201,6 +226,12 @@ function wireTimeline(root) {
   });
   list.querySelectorAll("[data-phone]").forEach((inp) => inp.oninput = () => {
     const s = findStop(inp.dataset.phone); if (s) s.phone = inp.value;
+  });
+  list.querySelectorAll("[data-surprise]").forEach((cb) => cb.onchange = () => {
+    const s = findStop(cb.dataset.surprise); if (!s) return;
+    s.surprise = cb.checked;
+    if (cb.checked && !s.addedBy) s.addedBy = store.getSession().me;
+    renderTimeline(root);
   });
   list.querySelectorAll("[data-tag]").forEach((cb) => cb.onchange = () => {
     const s = findStop(cb.dataset.tag); if (!s) return;
