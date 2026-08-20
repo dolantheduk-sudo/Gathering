@@ -14,6 +14,7 @@ let trip = null;
 let legs = [];                 // per-leg distance/time from the last route call
 let mapClickMode = null;       // null | "origin" | "destination"
 let pendingCategory = "sight"; // category chosen while adding a stop
+let sortables = [];            // active SortableJS instances
 const recompute = debounce(runRoute, 450);
 
 export async function openPlanner(root, existingId) {
@@ -152,15 +153,14 @@ function renderItem(pt) {
 
   return `
     <li class="ev ev--${cat}" data-id="${s.id}">
-      <span class="ev__pin">${def.icon}</span>
+      <button class="ev__pin ev__focus" data-focus="${s.id}" title="Show on map">${def.icon}</button>
       <div class="ev__main">
         <div class="ev__top">
+          <button class="ev__drag" aria-label="Drag to reorder" title="Drag to reorder">⠿</button>
           <select class="ev__cat" data-cat="${s.id}" aria-label="Category">${catOpts}</select>
-          <span class="ev__name">${escapeHtml(s.label)}</span>
+          <span class="ev__name ev__focus" data-focus="${s.id}">${escapeHtml(s.label)}</span>
           <span class="ev__eta">${fmtTime(pt.etaMin)}</span>
           <span class="ev__acts">
-            <button class="icon" data-move="${s.id}" data-dir="-1" aria-label="Move up">↑</button>
-            <button class="icon" data-move="${s.id}" data-dir="1" aria-label="Move down">↓</button>
             <button class="icon" data-remove="${s.id}" aria-label="Remove">✕</button>
           </span>
         </div>
@@ -170,6 +170,10 @@ function renderItem(pt) {
         </div>
         <div class="ev__tags">${tags}</div>
         <input class="ev__notes" data-notes="${s.id}" placeholder="Add a note…" value="${escapeHtml(s.notes || "")}">
+        <div class="ev__details">
+          <input class="ev__mini-in" data-conf="${s.id}" placeholder="Confirmation #" value="${escapeHtml(s.confirmation || "")}">
+          <input class="ev__mini-in" data-phone="${s.id}" placeholder="Phone" value="${escapeHtml(s.phone || "")}">
+        </div>
         ${s.photoUrl ? `<img class="ev__photo" src="${s.photoUrl}" alt="" loading="lazy">` : ""}
       </div>
     </li>`;
@@ -177,7 +181,6 @@ function renderItem(pt) {
 
 function wireTimeline(root) {
   const list = root.querySelector("#route-list");
-  list.querySelectorAll("[data-move]").forEach((b) => b.onclick = () => moveStop(b.dataset.move, Number(b.dataset.dir), root));
   list.querySelectorAll("[data-remove]").forEach((b) => b.onclick = () => removeStop(b.dataset.remove, root));
   list.querySelectorAll("[data-cat]").forEach((sel) => sel.onchange = () => {
     const s = findStop(sel.dataset.cat); if (!s) return;
@@ -193,6 +196,12 @@ function wireTimeline(root) {
   list.querySelectorAll("[data-notes]").forEach((inp) => inp.oninput = () => {
     const s = findStop(inp.dataset.notes); if (s) s.notes = inp.value;
   });
+  list.querySelectorAll("[data-conf]").forEach((inp) => inp.oninput = () => {
+    const s = findStop(inp.dataset.conf); if (s) s.confirmation = inp.value;
+  });
+  list.querySelectorAll("[data-phone]").forEach((inp) => inp.oninput = () => {
+    const s = findStop(inp.dataset.phone); if (s) s.phone = inp.value;
+  });
   list.querySelectorAll("[data-tag]").forEach((cb) => cb.onchange = () => {
     const s = findStop(cb.dataset.tag); if (!s) return;
     s.tags = s.tags || [];
@@ -200,7 +209,36 @@ function wireTimeline(root) {
     else s.tags = s.tags.filter((t) => t !== cb.value);
     cb.closest(".pill")?.classList.toggle("is-on", cb.checked);
   });
-  root.querySelector("#add-stop-again")?.addEventListener("click", () => addStop(root));
+  // Timeline → map: click a stop's pin or name to fly to it
+  list.querySelectorAll("[data-focus]").forEach((elm) => elm.onclick = () => {
+    const s = findStop(elm.dataset.focus);
+    if (s && map) { map.panTo({ lat: s.lat, lng: s.lng }); map.setZoom(12); }
+  });
+  initDrag(root);
+}
+
+// Drag-to-reorder via SortableJS (loaded in index.html). Works across day
+// lists; we rebuild the flat stop order from the DOM after each drop.
+function initDrag(root) {
+  sortables.forEach((s) => { try { s.destroy(); } catch {} });
+  sortables = [];
+  if (!window.Sortable) return;
+  root.querySelectorAll("#route-list .events").forEach((ol) => {
+    sortables.push(window.Sortable.create(ol, {
+      group: "stops",
+      draggable: ".ev[data-id]",
+      handle: ".ev__drag",
+      animation: 150,
+      ghostClass: "ev--ghost",
+      onEnd: () => reorderFromDom(root),
+    }));
+  });
+}
+
+function reorderFromDom(root) {
+  const ids = Array.from(root.querySelectorAll("#route-list .ev[data-id]")).map((el) => el.dataset.id);
+  trip.stops.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+  renderTimeline(root); recompute();
 }
 
 // ── Route computation + draw ─────────────────────────────────
@@ -218,7 +256,7 @@ async function runRoute() {
     legs = r.legs || [];
 
     clearRoute();
-    clearRoute = maps.drawRoute(map, { path: r.path, points: routePoints() });
+    clearRoute = maps.drawRoute(map, { path: r.path, points: routePoints() }, { onPointClick: focusStopCard });
     if (readout) readout.innerHTML = readoutHtml(trip.route);
     renderTimeline(document.querySelector(".planner")?.parentElement || document);
   } catch (e) {
@@ -232,9 +270,19 @@ async function runRoute() {
 
 function routePoints() {
   const pts = [{ ...trip.origin, role: "origin", label: trip.origin.label }];
-  trip.stops.forEach((s, i) => pts.push({ ...s, role: "stop", index: i + 1, label: s.label }));
+  trip.stops.forEach((s, i) => pts.push({ ...s, role: "stop", index: i + 1, label: s.label, stopId: s.id }));
   pts.push({ ...trip.destination, role: trip.type === "loop" ? "apex" : "destination", label: trip.destination.label });
   return pts;
+}
+
+// Map → timeline: clicking a stop marker highlights and scrolls to its card.
+function focusStopCard(pt) {
+  if (!pt.stopId) return;
+  const card = document.querySelector(`.ev[data-id="${pt.stopId}"]`);
+  if (!card) return;
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  card.classList.add("ev--flash");
+  setTimeout(() => card.classList.remove("ev--flash"), 1400);
 }
 
 // ── Controls / chrome ────────────────────────────────────────

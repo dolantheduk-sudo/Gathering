@@ -7,22 +7,27 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Space+Mono:wght@400;700&display=swap');
 
 :root {
-  --paper:   #eef0ea;
-  --card:    #fbfbf9;
-  --ink:     #17211f;
-  --slate:   #6e7b76;
-  --line:    #d6dad2;
-  --pine:    #2e6e5b;
-  --pine-deep:#1f4e40;
-  --route:   #e4a03c;
-  --clay:    #b9542f;
+  --paper:   #faf9f3;
+  --card:    #ffffff;
+  --ink:     #1b2532;
+  --slate:   #66707d;
+  --line:    #e7e3d8;
+  --pine:    #2f9e63;   /* brand green (primary) */
+  --pine-deep:#1f7a49;
+  --route:   #f5b52d;   /* bright yellow route */
+  --clay:    #e5722f;   /* orange */
+  --blue:    #2f6be0;
+  --purple:  #8b57e6;
+  --red:     #e5484d;
+  --yellow:  #f5b52d;
+  --teal:    #17b0a3;
 
   --display: "Space Grotesk", system-ui, sans-serif;
   --body:    "DM Sans", system-ui, sans-serif;
   --mono:    "Space Mono", ui-monospace, monospace;
 
   --r: 14px;
-  --shadow: 0 1px 2px rgba(23,33,31,.06), 0 8px 24px rgba(23,33,31,.06);
+  --shadow: 0 1px 2px rgba(27,37,50,.06), 0 8px 24px rgba(27,37,50,.07);
 }
 
 * { box-sizing: border-box; }
@@ -215,12 +220,12 @@ h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: -.01
    Event timeline (v2): dates, days, category cards, tags
    ═══════════════════════════════════════════════════════════ */
 :root {
-  --c-sight: #2e6e5b;
-  --c-food:  #c9702f;
-  --c-sleep: #5a6b8c;
-  --c-fun:   #9c5bb0;
-  --c-gas:   #b9932f;
-  --c-shop:  #3c8f86;
+  --c-sight: #2f9e63;
+  --c-food:  #e5722f;
+  --c-sleep: #2f6be0;
+  --c-fun:   #8b57e6;
+  --c-gas:   #f5b52d;
+  --c-shop:  #17b0a3;
 }
 
 /* Dates row */
@@ -293,3 +298,77 @@ h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: -.01
   .dates { gap: .4rem; }
   .mini input { font-size: .8rem; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Pizzazz — professionally fun: gradients, color pops, motion
+   ═══════════════════════════════════════════════════════════ */
+
+/* Gradient brand wordmark with a sunny diamond */
+.wordmark {
+  background: linear-gradient(92deg, var(--pine), var(--blue) 78%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.wordmark::before { -webkit-text-fill-color: var(--yellow); }
+
+/* Punchier primary button */
+.btn--solid { background: linear-gradient(135deg, var(--pine), #2bb673); border: 0; }
+.btn--solid:hover { background: linear-gradient(135deg, var(--pine-deep), var(--pine)); }
+
+/* Bright countdown pill on trip cards */
+.trip-card__media { position: relative; }
+.trip-card__count {
+  position: absolute; top: .6rem; right: .6rem;
+  background: var(--purple); color: #fff;
+  font-family: var(--mono); font-size: .68rem; font-weight: 700;
+  padding: .22rem .55rem; border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(27,37,50,.25);
+}
+
+/* Savings bar reads as money-green→teal */
+.jar__bar span { background: linear-gradient(90deg, var(--pine), var(--teal)); }
+
+/* Colorful day dot */
+.day-head__n { display: inline-flex; align-items: center; gap: .45rem; }
+.day-head__n::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: linear-gradient(135deg, var(--pine), var(--blue)); }
+
+/* Category-tinted pins */
+.ev--sight .ev__pin { background: #eaf6ef; }
+.ev--food  .ev__pin { background: #fdf0e7; }
+.ev--sleep .ev__pin { background: #e9f0fd; }
+.ev--fun   .ev__pin { background: #f2ebfc; }
+.ev--gas   .ev__pin { background: #fdf6e0; }
+.ev--shop  .ev__pin { background: #e0f6f2; }
+
+/* Category-colored active tag pills */
+.ev--sight .pill.is-on { background: #e4f3ea; border-color: var(--c-sight); color: #1f6b43; }
+.ev--food  .pill.is-on { background: #fdeee2; border-color: var(--c-food);  color: #9c4a1e; }
+.ev--sleep .pill.is-on { background: #e6eefc; border-color: var(--c-sleep); color: #1c47a3; }
+.ev--fun   .pill.is-on { background: #f0e8fc; border-color: var(--c-fun);   color: #5f34a3; }
+.ev--gas   .pill.is-on { background: #fdf3d9; border-color: var(--c-gas);   color: #8a6410; }
+.ev--shop  .pill.is-on { background: #d9f5f1; border-color: var(--c-shop);  color: #0e6f66; }
+
+/* Drag-to-reorder */
+.ev__drag { background: none; border: 0; cursor: grab; color: var(--slate); font-size: 1rem; line-height: 1; padding: 0 .15rem; touch-action: none; }
+.ev__drag:active { cursor: grabbing; }
+.ev--ghost { opacity: .35; }
+.ev--drag-chosen { background: #fffbe9; border-radius: 10px; }
+
+/* Click a stop to fly the map to it */
+.ev__focus { cursor: pointer; }
+button.ev__pin { padding: 0; font-family: inherit; }
+.ev__pin.ev__focus:hover { transform: scale(1.08); }
+.ev__name.ev__focus:hover { color: var(--blue); text-decoration: underline dotted; }
+
+/* Marker-click highlight */
+@keyframes flashPulse { 0% { background: #fff3cf; } 100% { background: transparent; } }
+.ev--flash { animation: flashPulse 1.4s ease; border-radius: 10px; }
+
+/* Upgraded notes: confirmation # / phone */
+.ev__details { display: flex; gap: .4rem; margin-top: .4rem; }
+.ev__mini-in { flex: 1; min-width: 0; font-size: .78rem; padding: .28rem .45rem; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+.ev__mini-in:focus { outline: none; border-color: var(--pine); }
+.ev__line { margin: .25rem 0 0; font-size: .82rem; color: var(--slate); }
+
+/* Detail action buttons wrap on small screens */
+.detail__actions { flex-wrap: wrap; }

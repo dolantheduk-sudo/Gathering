@@ -29,7 +29,9 @@ function card(t) {
   const time = t.route ? fmtDuration(t.route.durationSeconds) : "";
   const totals = store.jarTotals(t);
   const pct = totals.goal ? Math.min(100, Math.round((totals.saved / totals.goal) * 100)) : 0;
-  const hero = t.origin?.photoUrl || t.destination?.photoUrl || t.stops.find((s) => s.photoUrl)?.photoUrl;
+  // Prefer a photo that's distinctive to THIS trip (destination or a stop)
+  // over the origin — trips sharing a start city would otherwise collide.
+  const hero = t.destination?.photoUrl || t.stops.find((s) => s.photoUrl)?.photoUrl || t.origin?.photoUrl;
   const tl = buildTimeline(t, t.legs || []);
   const dateBits = [];
   if (t.startDate) dateBits.push(fmtDate(t.startDate));
@@ -84,6 +86,7 @@ export function renderTrip(root, id) {
         </div>
         <div class="detail__actions">
           <a class="btn btn--ghost" href="#/plan/${t.id}">Edit plan</a>
+          <button class="btn btn--ghost" data-dup="${t.id}">Duplicate</button>
           <button class="btn btn--quiet" data-del="${t.id}">Delete</button>
         </div>
       </header>
@@ -97,6 +100,10 @@ export function renderTrip(root, id) {
     </section>`;
 
   renderJar(root.querySelector("#jar-slot"), t.id);
+  root.querySelector("[data-dup]")?.addEventListener("click", () => {
+    const copy = store.duplicateTrip(id);
+    if (copy) location.hash = `#/plan/${copy.id}`;
+  });
   root.querySelector("[data-del]")?.addEventListener("click", () => {
     if (confirm("Delete this trip for the whole Gathering?")) { store.deleteTrip(id); location.hash = "#/"; }
   });
@@ -143,6 +150,8 @@ function readItem(pt) {
         </div>
         ${tags ? `<div class="ev__tags">${tags}</div>` : ""}
         ${s.cost != null ? `<p class="ev__cost mono">$${s.cost}</p>` : ""}
+        ${s.confirmation ? `<p class="ev__line">📋 ${escapeHtml(s.confirmation)}</p>` : ""}
+        ${s.phone ? `<p class="ev__line">📞 ${escapeHtml(s.phone)}</p>` : ""}
         ${s.notes ? `<p class="ev__noteline">${escapeHtml(s.notes)}</p>` : ""}
         ${s.photoUrl ? `<img class="ev__photo" src="${s.photoUrl}" alt="" loading="lazy">` : ""}
       </div>

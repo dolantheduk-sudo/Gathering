@@ -160,7 +160,8 @@ export async function computeRoute({ origin, destination, waypoints = [] }) {
 }
 
 // Draw the amber dashed "route" polyline + pins. Returns a cleanup handle.
-export function drawRoute(map, { path, points }) {
+// opts.onPointClick(point) fires when a marker is clicked (for map↔list sync).
+export function drawRoute(map, { path, points }, opts = {}) {
   const overlays = [];
 
   if (path?.length) {
@@ -169,7 +170,7 @@ export function drawRoute(map, { path, points }) {
       geodesic: true,
       strokeOpacity: 0,          // we only want the dashes
       icons: [{
-        icon: { path: "M 0,-1 0,1", strokeOpacity: 1, strokeColor: "#E4A03C", strokeWeight: 4, scale: 3 },
+        icon: { path: "M 0,-1 0,1", strokeOpacity: 1, strokeColor: "#F5B52D", strokeWeight: 4, scale: 3 },
         offset: "0", repeat: "16px",
       }],
       map,
@@ -186,6 +187,7 @@ export function drawRoute(map, { path, points }) {
       icon: pinIcon(kind),
       title: pt.label,
     });
+    if (opts.onPointClick) marker.addListener("click", () => opts.onPointClick(pt));
     overlays.push(marker);
   });
 
@@ -199,11 +201,11 @@ export function drawRoute(map, { path, points }) {
 }
 
 function pinIcon(kind) {
-  const fill = kind === "origin" ? "#2E6E5B"
-    : kind === "destination" ? "#1F4E40"
-    : kind === "apex" ? "#B9542F"
-    : "#EEF0EA";
-  const stroke = kind === "stop" ? "#E4A03C" : "#17211F";
+  const fill = kind === "origin" ? "#2F9E63"
+    : kind === "destination" ? "#1F7A49"
+    : kind === "apex" ? "#E5722F"
+    : "#FBFAF5";
+  const stroke = kind === "stop" ? "#F5B52D" : "#1B2532";
   return {
     path: google.maps.SymbolPath.CIRCLE,
     scale: kind === "stop" ? 10 : 12,

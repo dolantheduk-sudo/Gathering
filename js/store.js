@@ -93,6 +93,21 @@ export function deleteTrip(id) {
   write(s);
 }
 
+export function duplicateTrip(id) {
+  const orig = getTrip(id);
+  if (!orig) return null;
+  const copy = structuredClone(orig);
+  copy.id = uid();
+  copy.name = `${orig.name || "Trip"} (copy)`;
+  copy.jar = { goal: orig.jar?.goal || 0, contributions: [] }; // fresh jar
+  copy.createdAt = now();
+  copy.updatedAt = now();
+  const s = read();
+  s.trips[copy.id] = copy;
+  write(s);
+  return copy;
+}
+
 // ── Jar ──────────────────────────────────────────────────────
 export function setGoal(tripId, goal) {
   const t = getTrip(tripId); if (!t) return;

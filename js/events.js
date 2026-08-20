@@ -123,6 +123,8 @@ export function migrateStop(s) {
     id: s.id, label: s.label, lat: s.lat, lng: s.lng,
     placeId: s.placeId || null, photoUrl: s.photoUrl || null,
     notes: s.notes || "",
+    confirmation: s.confirmation || "",
+    phone: s.phone || "",
     category: s.category || "sight",
     tags: Array.isArray(s.tags) ? s.tags : [],
     stayMin: s.stayMin != null ? s.stayMin : null,
