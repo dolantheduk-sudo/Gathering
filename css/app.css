@@ -157,6 +157,13 @@ h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: -.01
 .node__noteline { margin: .3rem 0 0; font-size: .84rem; color: var(--slate); }
 .node__photo { margin-top: .5rem; width: 100%; max-width: 220px; border-radius: 10px; border: 1px solid var(--line); display: block; }
 
+/* New Places Autocomplete web component (PlaceAutocompleteElement) */
+.ac-slot { flex: 1; min-width: 0; }
+.ac-slot gmp-place-autocomplete { width: 100%; }
+.field__current { font-size: .78rem; color: var(--slate); margin: .35rem 0 0; }
+.field__current:empty { display: none; }
+.hint { font-size: .82rem; color: var(--slate); margin: .3rem 0; }
+
 .stop-adder { margin-top: .3rem; }
 .panel__foot { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 .flash { font-size: .82rem; color: var(--pine); opacity: 0; transition: opacity .2s; }
