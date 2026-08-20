@@ -429,3 +429,16 @@ body {
 
 /* Active tab reads as a bright brand pill */
 .tabs a.is-active { color: #fff; background: var(--pine); }
+
+/* ── Auth / join screens + join-code chip ─────────────────── */
+.onboard__switch { font-size: .85rem; color: var(--slate); margin-top: .9rem; text-align: center; }
+.onboard__err { color: var(--red); font-size: .85rem; margin-top: .6rem; min-height: 1em; }
+.topbar__right { margin-left: auto; display: flex; align-items: center; gap: .9rem; }
+.topbar__right .gname { margin-left: 0; }
+.code-chip {
+  font-family: var(--mono); font-size: .72rem; color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 10%, white);
+  border: 1px solid color-mix(in srgb, var(--blue) 30%, white);
+  padding: .2rem .55rem; border-radius: 999px;
+}
+.code-chip b { letter-spacing: .1em; font-weight: 700; }

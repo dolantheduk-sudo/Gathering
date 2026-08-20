@@ -1,126 +1,163 @@
 // ─────────────────────────────────────────────────────────────
-//  Store — the data layer.
+//  Store — one synchronous cache, two backends behind it.
 //
-//  Every screen talks to the app through THIS interface, never directly
-//  to localStorage or Supabase. That is the second seam: to go multiplayer,
-//  reimplement these functions against Supabase (stubs shown at the bottom)
-//  and flip config.BACKEND — no screen code changes.
-//
-//  Shape of a trip:
-//  {
-//    id, name, type: "line" | "loop",
-//    origin:      { label, lat, lng, placeId, photoUrl } | null,
-//    destination: { ... } | null,   // for a loop this is the TURNAROUND (apex)
-//    stops: [ { id, label, lat, lng, placeId, photoUrl, notes } ],
-//    route: { distanceMeters, durationSeconds } | null,
-//    jar:   { goal, contributions: [ { id, member, amount, at } ] },
-//    createdBy, createdAt, updatedAt
-//  }
+//  Every screen reads/writes through this module and never knows which
+//  backend is live. Getters read an in-memory cache (sync). Mutations
+//  update the cache immediately (optimistic) and persist async:
+//   • local    → whole blob to localStorage
+//   • supabase → per-row writes; realtime keeps the cache fresh
+//  Only boot + auth are async (see initSession / the *Async fns).
 // ─────────────────────────────────────────────────────────────
 
 import { config } from "./config.js";
 import { migrateStop } from "./events.js";
 
-const KEY = "gathering:v1";
+const LOCAL_KEY = "gathering:v1";
+const isSupa = () => config.BACKEND === "supabase";
 
-function read() {
-  try { return JSON.parse(localStorage.getItem(KEY)) || seed(); }
-  catch { return seed(); }
-}
-function write(state) {
-  localStorage.setItem(KEY, JSON.stringify(state));
-  return state;
-}
-function seed() {
-  return write({ gathering: null, me: null, trips: {} });
-}
+let cache = { gathering: null, me: null, trips: {} };
+let userId = null;
+let unsub = null;
+let dataCb = () => {};
 
-export const uid = () => Math.random().toString(36).slice(2, 10);
+let _sb = null;
+async function sb() { if (!_sb) _sb = await import("./backend-supabase.js"); return _sb; }
+
+export const uid = () =>
+  (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12));
 const now = () => new Date().toISOString();
 
-// ── Gathering / membership ───────────────────────────────────
-export function getSession() {
-  const s = read();
-  return { gathering: s.gathering, me: s.me };
-}
-export function joinGathering(gatheringName, memberName) {
-  const s = read();
-  s.gathering = s.gathering || { id: uid(), name: gatheringName, members: [] };
-  if (gatheringName) s.gathering.name = gatheringName;
-  if (!s.gathering.members.includes(memberName)) s.gathering.members.push(memberName);
-  s.me = memberName;
-  return write(s).gathering;
-}
-
-// ── Trips ────────────────────────────────────────────────────
-export function listTrips() {
-  return Object.values(read().trips)
-    .map(migrateTrip)
-    .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
-}
-export function getTrip(id) {
-  const t = read().trips[id];
-  return t ? migrateTrip(t) : null;
-}
-
-// Bring older/partial trips up to the current event+dates shape on read,
-// so new code can assume the full model without breaking saved trips.
-function migrateTrip(t) {
+// ── Normalize any trip to the current shape ──────────────────
+function normalize(t) {
   return {
     ...t,
     startDate: t.startDate || null,
     departureTime: t.departureTime || "08:00",
     dayStart: t.dayStart || "09:00",
     legs: Array.isArray(t.legs) ? t.legs : [],
+    jar: t.jar || { goal: 0, contributions: [] },
     stops: (t.stops || []).map(migrateStop),
   };
 }
+
+// ── Boot ─────────────────────────────────────────────────────
+// Returns { authed, gathering }. In local mode always authed.
+export async function initSession() {
+  if (!isSupa()) { loadLocal(); return { authed: true, gathering: cache.gathering }; }
+
+  const api = await sb();
+  const user = await api.getUser();
+  if (!user) return { authed: false, gathering: null };
+  userId = user.id;
+
+  const m = await api.getMembership();
+  if (!m) return { authed: true, gathering: null };
+  setGathering(m);
+  await hydrate();
+  startRealtime();
+  return { authed: true, gathering: cache.gathering };
+}
+
+function setGathering(m) {
+  cache.gathering = { id: m.gatheringId, name: m.name, joinCode: m.joinCode, members: [] };
+  cache.me = m.displayName;
+}
+async function hydrate() {
+  const api = await sb();
+  const trips = await api.loadTrips(cache.gathering.id);
+  cache.trips = {};
+  for (const t of trips) cache.trips[t.id] = normalize(t);
+}
+function startRealtime() {
+  if (unsub) unsub();
+  sb().then((api) => {
+    unsub = api.subscribe(cache.gathering.id, async () => { await hydrate(); dataCb(); });
+  });
+}
+
+// ── Auth passthrough (supabase mode) ─────────────────────────
+export async function signUp(email, pw, name) { return (await sb()).signUp(email, pw, name); }
+export async function signIn(email, pw) { return (await sb()).signIn(email, pw); }
+export async function signOut() {
+  if (isSupa()) { if (unsub) unsub(); await (await sb()).signOut(); }
+  cache = { gathering: null, me: null, trips: {} };
+}
+
+export async function createGatheringAsync(name, display) {
+  const m = await (await sb()).createGathering(name, display);
+  setGathering(m); cache.trips = {}; startRealtime();
+  return cache.gathering;
+}
+export async function joinGatheringCodeAsync(code, display) {
+  const m = await (await sb()).joinByCode(code, display);
+  setGathering(m); await hydrate(); startRealtime();
+  return cache.gathering;
+}
+
+// ── Session / membership ─────────────────────────────────────
+export function getSession() { return { gathering: cache.gathering, me: cache.me }; }
+
+// Local-mode onboarding (unchanged behaviour)
+export function joinGathering(gatheringName, memberName) {
+  cache.gathering = cache.gathering || { id: uid(), name: gatheringName, members: [] };
+  if (gatheringName) cache.gathering.name = gatheringName;
+  cache.gathering.members = cache.gathering.members || [];
+  if (!cache.gathering.members.includes(memberName)) cache.gathering.members.push(memberName);
+  cache.me = memberName;
+  persistLocal();
+  return cache.gathering;
+}
+
+// ── Trips (sync reads from cache) ────────────────────────────
+export function listTrips() {
+  return Object.values(cache.trips).sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+}
+export function getTrip(id) { return cache.trips[id] || null; }
+
 export function saveTrip(trip) {
-  const s = read();
-  const t = { ...trip };
+  const t = normalize({ ...trip });
   t.id = t.id || uid();
-  t.createdBy = t.createdBy || s.me || "Someone";
+  t.createdBy = t.createdBy || cache.me || "Someone";
   t.createdAt = t.createdAt || now();
   t.updatedAt = now();
-  t.jar = t.jar || { goal: 0, contributions: [] };
-  s.trips[t.id] = t;
-  write(s);
+  cache.trips[t.id] = t;
+  if (isSupa()) sb().then((api) => api.upsertTrip(t, cache.gathering.id, userId)).catch(reportErr);
+  else persistLocal();
   return t;
 }
 export function deleteTrip(id) {
-  const s = read();
-  delete s.trips[id];
-  write(s);
+  delete cache.trips[id];
+  if (isSupa()) sb().then((api) => api.removeTrip(id)).catch(reportErr);
+  else persistLocal();
 }
-
 export function duplicateTrip(id) {
   const orig = getTrip(id);
   if (!orig) return null;
   const copy = structuredClone(orig);
   copy.id = uid();
   copy.name = `${orig.name || "Trip"} (copy)`;
-  copy.jar = { goal: orig.jar?.goal || 0, contributions: [] }; // fresh jar
+  copy.jar = { goal: orig.jar?.goal || 0, contributions: [] };
   copy.createdAt = now();
-  copy.updatedAt = now();
-  const s = read();
-  s.trips[copy.id] = copy;
-  write(s);
-  return copy;
+  copy.createdBy = cache.me || "Someone";
+  return saveTrip(copy);
 }
 
 // ── Jar ──────────────────────────────────────────────────────
 export function setGoal(tripId, goal) {
-  const t = getTrip(tripId); if (!t) return;
+  const t = cache.trips[tripId]; if (!t) return;
   t.jar = t.jar || { goal: 0, contributions: [] };
   t.jar.goal = Number(goal) || 0;
-  saveTrip(t);
+  if (isSupa()) sb().then((api) => api.updateGoal(tripId, t.jar.goal)).catch(reportErr);
+  else persistLocal();
   return t;
 }
 export function deposit(tripId, member, amount) {
-  const t = getTrip(tripId); if (!t) return;
+  const t = cache.trips[tripId]; if (!t) return;
   t.jar = t.jar || { goal: 0, contributions: [] };
-  t.jar.contributions.push({ id: uid(), member, amount: Number(amount) || 0, at: now() });
-  saveTrip(t);
+  const amt = Number(amount) || 0;
+  t.jar.contributions.push({ id: uid(), member, amount: amt, at: now() });
+  if (isSupa()) sb().then((api) => api.insertContribution(tripId, member, amt)).catch(reportErr);
+  else persistLocal();
   return t;
 }
 export function jarTotals(trip) {
@@ -132,28 +169,22 @@ export function jarTotals(trip) {
   return { saved, goal, remaining: Math.max(goal - saved, 0), byMember };
 }
 
-// ── Realtime hook (no-op locally; Supabase fills this in) ─────
-export function onTripsChanged(cb) {
-  window.addEventListener("storage", (e) => { if (e.key === KEY) cb(); });
-  return () => {}; // unsubscribe
+// ── Change subscription (realtime or cross-tab) ──────────────
+export function onTripsChanged(cb) { dataCb = cb; }
+export function onData(cb) { dataCb = cb; }
+
+// ── Local persistence ────────────────────────────────────────
+function loadLocal() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LOCAL_KEY));
+    if (s) { cache = { gathering: s.gathering, me: s.me, trips: {} };
+      for (const [id, t] of Object.entries(s.trips || {})) cache.trips[id] = normalize(t); }
+  } catch { /* fresh */ }
+  window.addEventListener("storage", (e) => { if (e.key === LOCAL_KEY) { loadLocal(); dataCb(); } });
+}
+function persistLocal() {
+  const blob = { gathering: cache.gathering, me: cache.me, trips: cache.trips };
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(blob));
 }
 
-/* ─────────────────────────────────────────────────────────────
-   SUPABASE ADAPTER (fill in when config.BACKEND === "supabase")
-
-   import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-   const db = createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
-
-   listTrips  → await db.from("trips").select("*, stops(*), contributions(*)")
-                        .eq("gathering_id", gid).order("updated_at",{ascending:false})
-   saveTrip   → upsert trip row, then upsert stops rows
-   deposit    → insert into contributions
-   onTripsChanged →
-     db.channel("trips")
-       .on("postgres_changes", { event:"*", schema:"public", table:"trips" }, cb)
-       .on("presence", ...)   // who's editing, via Realtime Presence
-       .subscribe();
-
-   Notifications ("new trip planned", "someone deposited") ride on
-   Supabase Database Webhooks → Edge Function → email/push. See README.
-   ───────────────────────────────────────────────────────────── */
+function reportErr(err) { console.error("Gathering sync error:", err?.message || err); }

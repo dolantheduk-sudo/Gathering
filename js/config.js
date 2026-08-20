@@ -19,11 +19,11 @@ export const config = {
   //    "local"    → everything saved in this browser (localStorage). Works today, no setup.
   //    "supabase" → shared across your Gathering in real time. See supabase/schema.sql
   //                 and README before switching this on.
-  BACKEND: "local",
+  BACKEND: "supabase",
 
   // 4) Supabase (only used when BACKEND === "supabase").
-  SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: "",
+  SUPABASE_URL: "https://kwdavhsaxlnljvkgbers.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3ZGF2aHNheGxubGp2a2diZXJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNTYyNDQsImV4cCI6MjEwMjgzMjI0NH0.000YdDrlgma2yncSFr_q11bM5rr5HVBp9NMO4D8YDvI",
 
   // 5) Units.
   UNITS: "imperial", // "imperial" (miles) or "metric" (km)
