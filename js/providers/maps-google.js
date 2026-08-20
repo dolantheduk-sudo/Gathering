@@ -48,7 +48,7 @@ export function loadMaps(apiKey) {
       google.maps.importLibrary("maps"),      // Map, Polyline, Marker
       google.maps.importLibrary("places"),    // Autocomplete, photos
       google.maps.importLibrary("geocoding"), // reverse-geocode map clicks
-      google.maps.importLibrary("routes"),    // DirectionsService
+      google.maps.importLibrary("routes"),    // Route.computeRoutes
     ]).then(resolve).catch(reject);
   });
   return _loaded;
@@ -122,25 +122,46 @@ function normalizePlace(place) {
 // Returns { distanceMeters, durationSeconds, path: [{lat,lng}, ...] }.
 // For a LOOP, pass destination === origin and put every stop (incl. the
 // turnaround) in waypoints.
-export function computeRoute({ origin, destination, waypoints = [] }) {
-  const svc = new google.maps.DirectionsService();
-  return new Promise((resolve, reject) => {
-    svc.route({
-      origin: { lat: origin.lat, lng: origin.lng },
-      destination: { lat: destination.lat, lng: destination.lng },
-      waypoints: waypoints.map((w) => ({ location: { lat: w.lat, lng: w.lng }, stopover: true })),
-      travelMode: google.maps.TravelMode.DRIVING,
-      optimizeWaypoints: false,
-    }, (res, status) => {
-      if (status !== "OK" || !res.routes[0]) return reject(new Error(status));
-      const legs = res.routes[0].legs;
-      resolve({
-        distanceMeters: legs.reduce((s, l) => s + l.distance.value, 0),
-        durationSeconds: legs.reduce((s, l) => s + l.duration.value, 0),
-        path: res.routes[0].overview_path.map((p) => ({ lat: p.lat(), lng: p.lng() })),
-      });
-    });
+//
+// Uses the new Routes API (Route.computeRoutes) — the legacy
+// DirectionsService is blocked for projects created after Feb 2026.
+export async function computeRoute({ origin, destination, waypoints = [] }) {
+  const { Route } = await google.maps.importLibrary("routes");
+  const wp = (p) => ({ location: { lat: p.lat, lng: p.lng } });
+
+  const result = await Route.computeRoutes({
+    origin: wp(origin),
+    destination: wp(destination),
+    intermediates: waypoints.map(wp),
+    travelMode: "DRIVING",
+    fields: ["path", "distanceMeters", "duration"],
   });
+
+  const route = result.routes?.[0];
+  if (!route) throw new Error("NO_ROUTE");
+
+  const path = (route.path || []).map((p) => ({
+    lat: typeof p.lat === "function" ? p.lat() : p.lat,
+    lng: typeof p.lng === "function" ? p.lng() : p.lng,
+  }));
+
+  return {
+    distanceMeters: route.distanceMeters || 0,
+    durationSeconds: toSeconds(route.duration),
+    path,
+  };
+}
+
+// Route duration can come back as a number, a "3600s" string, or an object.
+function toSeconds(d) {
+  if (d == null) return 0;
+  if (typeof d === "number") return d;
+  if (typeof d === "string") return parseInt(d, 10) || 0;
+  if (typeof d === "object") {
+    if (typeof d.seconds === "number") return d.seconds;
+    if (typeof d.value === "number") return d.value;
+  }
+  return 0;
 }
 
 // Draw the amber dashed "route" polyline + pins. Returns a cleanup handle.
