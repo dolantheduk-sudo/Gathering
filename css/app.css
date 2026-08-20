@@ -372,3 +372,60 @@ button.ev__pin { padding: 0; font-family: inherit; }
 
 /* Detail action buttons wrap on small screens */
 .detail__actions { flex-wrap: wrap; }
+
+/* ═══════════════════════════════════════════════════════════
+   Color canvas — put life into the big surfaces, not just accents
+   ═══════════════════════════════════════════════════════════ */
+
+/* Soft colored glows on the page instead of flat white */
+body {
+  background:
+    radial-gradient(900px 480px at 108% -8%, rgba(47,107,224,.14), transparent 60%),
+    radial-gradient(820px 460px at -10% -6%, rgba(47,158,99,.16), transparent 58%),
+    radial-gradient(700px 500px at 50% 118%, rgba(139,87,230,.10), transparent 60%),
+    var(--paper);
+  background-attachment: fixed;
+}
+
+/* Playful multicolor stripe under the top bar */
+.topbar { position: relative; }
+.topbar::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px;
+  background: linear-gradient(90deg, var(--pine), var(--yellow) 34%, var(--blue) 68%, var(--purple));
+}
+
+/* Page title gets a colored underline swoosh */
+.home__title { position: relative; display: inline-block; }
+.home__title::after {
+  content: ""; display: block; height: 5px; width: 54px; margin-top: 7px;
+  border-radius: 3px; background: linear-gradient(90deg, var(--yellow), var(--clay));
+}
+.eyebrow { color: var(--blue); }
+
+/* Cards feel color-themed: rotate an accent, tint the divider, pill, and hover glow */
+.trip-card { --accent: var(--pine); border: 1px solid var(--line); }
+.trip-card:nth-child(6n+2) { --accent: var(--blue); }
+.trip-card:nth-child(6n+3) { --accent: var(--purple); }
+.trip-card:nth-child(6n+4) { --accent: var(--clay); }
+.trip-card:nth-child(6n+5) { --accent: var(--teal); }
+.trip-card:nth-child(6n+6) { --accent: var(--red); }
+.trip-card__media { border-bottom: 4px solid var(--accent); }
+.trip-card__count { background: var(--accent); }
+.trip-card__name { color: var(--ink); }
+.trip-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 12px rgba(27,37,50,.09), 0 22px 46px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.trip-card__meta .mono { color: var(--blue); }
+
+/* Empty-state mark gets the brand gradient */
+.empty__mark { border: 0; background: conic-gradient(from 210deg, var(--pine), var(--yellow), var(--blue), var(--purple), var(--pine)); }
+
+/* Readout bar: warmer dark with a colored top edge */
+.readout { border-top: 3px solid var(--yellow); }
+
+/* Section eyebrow + jar heading pop */
+.jar__saved { background: linear-gradient(92deg, var(--pine), var(--teal)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+
+/* Active tab reads as a bright brand pill */
+.tabs a.is-active { color: #fff; background: var(--pine); }
