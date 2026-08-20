@@ -2,7 +2,7 @@
 //  Maps provider — Google implementation
 //
 //  This is the SEAM. Everything Google-specific lives here, behind a
-//  small interface: loadMaps, createMap, attachSearch, computeRoute,
+//  small interface: loadMaps, createMap, createAutocomplete, computeRoute,
 //  drawRoute, photoUrlFor. To move to Mapbox/MapLibre later, write a
 //  maps-mapbox.js that exports the same functions — nothing else changes.
 //
@@ -64,18 +64,28 @@ export function createMap(el, center, zoom) {
   });
 }
 
-// Attach Places Autocomplete to a text input. Calls onPick with a
-// normalized point: { label, lat, lng, placeId, photoUrl }.
-export function attachSearch(inputEl, onPick) {
-  const ac = new google.maps.places.Autocomplete(inputEl, {
-    fields: ["place_id", "name", "formatted_address", "geometry", "photos"],
+// Create a Place Autocomplete widget inside a container element, and call
+// onPick with a normalized point when the user selects a place.
+//
+// NOTE: the classic google.maps.places.Autocomplete widget was cut off for
+// projects created after March 1, 2025, so we use the new web component,
+// PlaceAutocompleteElement (runs on Places API New). It renders its own input,
+// so we drop it into a container rather than attaching to an <input>.
+export function createAutocomplete(container, onPick) {
+  const el = new google.maps.places.PlaceAutocompleteElement();
+  el.style.width = "100%";
+  container.replaceChildren(el);
+
+  el.addEventListener("gmp-select", async (event) => {
+    try {
+      const place = event.placePrediction.toPlace();
+      await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "photos"] });
+      onPick(normalizePlace(place));
+    } catch (err) {
+      console.error("Place selection failed:", err);
+    }
   });
-  ac.addListener("place_changed", () => {
-    const p = ac.getPlace();
-    if (!p.geometry) return;
-    onPick(normalizePlace(p));
-  });
-  return ac;
+  return el;
 }
 
 // Reverse-geocode a map click into a point (for "set point on map").
@@ -94,13 +104,17 @@ export async function pointFromClick(latLng) {
   }
 }
 
-function normalizePlace(p) {
+function normalizePlace(place) {
+  const loc = place.location;
+  const lat = typeof loc?.lat === "function" ? loc.lat() : loc?.lat;
+  const lng = typeof loc?.lng === "function" ? loc.lng() : loc?.lng;
+  let photoUrl = null;
+  try { photoUrl = place.photos?.[0]?.getURI?.({ maxWidth: 400, maxHeight: 300 }) || null; } catch { photoUrl = null; }
   return {
-    label: p.name || p.formatted_address || "Unnamed stop",
-    lat: p.geometry.location.lat(),
-    lng: p.geometry.location.lng(),
-    placeId: p.place_id || null,
-    photoUrl: p.photos?.[0]?.getUrl({ maxWidth: 320, maxHeight: 220 }) || null,
+    label: place.displayName || place.formattedAddress || "Unnamed stop",
+    lat, lng,
+    placeId: place.id || null,
+    photoUrl,
   };
 }
 
