@@ -95,7 +95,7 @@ export async function upsertTrip(t, gatheringId, userId) {
     start_date: t.startDate || null, departure_time: t.departureTime || "08:00", day_start: t.dayStart || "09:00",
     distance_m: t.route?.distanceMeters ?? null, duration_s: t.route?.durationSeconds ?? null,
     legs: t.legs || [], stops: t.stops || [], jar_goal: t.jar?.goal || 0,
-    created_by: t.createdBy || userId || null,
+    created_by: userId || null,
   };
   const { error } = await client().from("trips").upsert(row);
   if (error) throw error;
