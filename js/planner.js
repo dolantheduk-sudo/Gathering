@@ -25,8 +25,8 @@ export async function openPlanner(root, existingId) {
   try {
     await maps.loadMaps(config.GOOGLE_MAPS_API_KEY);
     map = maps.createMap(mapEl, config.DEFAULT_CENTER, config.DEFAULT_ZOOM);
-    maps.attachSearch(root.querySelector("#origin-input"), (pt) => setPoint("origin", pt, root));
-    maps.attachSearch(root.querySelector("#dest-input"), (pt) => setPoint("destination", pt, root));
+    maps.createAutocomplete(root.querySelector("#origin-ac"), (pt) => setPoint("origin", pt, root));
+    maps.createAutocomplete(root.querySelector("#dest-ac"), (pt) => setPoint("destination", pt, root));
     map.addListener("click", async (e) => {
       if (!mapClickMode) return;
       const pt = await maps.pointFromClick(e.latLng);
@@ -49,8 +49,8 @@ const destLabel = () => (trip.type === "loop" ? "Turnaround point" : "Destinatio
 // ── Setting origin / destination ─────────────────────────────
 function setPoint(which, pt, root) {
   trip[which] = pt;
-  const input = root.querySelector(which === "origin" ? "#origin-input" : "#dest-input");
-  input.value = pt.label;
+  const cur = root.querySelector(which === "origin" ? "#origin-current" : "#dest-current");
+  if (cur) cur.textContent = `Current: ${pt.label}`;
   recompute();
   renderStops(root);
 }
@@ -64,19 +64,18 @@ function setClickMode(mode, root) {
 
 // ── Stops ────────────────────────────────────────────────────
 function addStop(root) {
-  const wrap = el("div", "stop-adder");
-  const input = el("input", "input");
-  input.placeholder = "Search a place — restaurant, park, landmark…";
-  wrap.append(input);
-  root.querySelector("#stop-add-slot").replaceChildren(wrap);
-  input.focus();
-  if (config.GOOGLE_MAPS_API_KEY && map) {
-    maps.attachSearch(input, (pt) => {
-      trip.stops.push({ id: store.uid(), ...pt, notes: "" });
-      root.querySelector("#stop-add-slot").replaceChildren();
-      renderStops(root); recompute();
-    });
+  const slot = root.querySelector("#stop-add-slot");
+  if (!config.GOOGLE_MAPS_API_KEY || !map) {
+    slot.innerHTML = `<p class="hint">Add your Google key in config.js to search for stops.</p>`;
+    return;
   }
+  const wrap = el("div", "stop-adder ac-slot");
+  slot.replaceChildren(wrap);
+  maps.createAutocomplete(wrap, (pt) => {
+    trip.stops.push({ id: store.uid(), ...pt, notes: "" });
+    slot.replaceChildren();
+    renderStops(root); recompute();
+  });
 }
 function removeStop(id, root) { trip.stops = trip.stops.filter((s) => s.id !== id); renderStops(root); recompute(); }
 function moveStop(id, dir, root) {
@@ -173,7 +172,6 @@ function wireControls(root) {
       trip.type = btn.dataset.type;
       root.querySelectorAll("[data-type]").forEach((b) => b.classList.toggle("is-on", b.dataset.type === trip.type));
       root.querySelector("#dest-label").textContent = destLabel();
-      root.querySelector("#dest-input").placeholder = `Search ${destLabel().toLowerCase()}…`;
       renderStops(root); recompute();
     };
   });
@@ -204,21 +202,23 @@ function template(t) {
         <button class="seg__btn ${t.type === "loop" ? "is-on" : ""}" data-type="loop">Loop — out & back</button>
       </div>
 
-      <label class="field">
+      <div class="field">
         <span class="field__label">Start</span>
         <div class="field__row">
-          <input id="origin-input" class="input" placeholder="Search a starting point…" value="${escapeHtml(t.origin?.label || "")}">
+          <div id="origin-ac" class="ac-slot"></div>
           <button class="pick" data-pick="origin" title="Pick on map">📍</button>
         </div>
-      </label>
+        <p class="field__current" id="origin-current">${t.origin ? "Current: " + escapeHtml(t.origin.label) : ""}</p>
+      </div>
 
-      <label class="field">
+      <div class="field">
         <span class="field__label" id="dest-label">${t.type === "loop" ? "Turnaround point" : "Destination"}</span>
         <div class="field__row">
-          <input id="dest-input" class="input" placeholder="Search destination…" value="${escapeHtml(t.destination?.label || "")}">
+          <div id="dest-ac" class="ac-slot"></div>
           <button class="pick" data-pick="destination" title="Pick on map">📍</button>
         </div>
-      </label>
+        <p class="field__current" id="dest-current">${t.destination ? "Current: " + escapeHtml(t.destination.label) : ""}</p>
+      </div>
 
       <ol id="route-list" class="route-list"></ol>
 
