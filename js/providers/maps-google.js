@@ -134,7 +134,7 @@ export async function computeRoute({ origin, destination, waypoints = [] }) {
     destination: wp(destination),
     intermediates: waypoints.map(wp),
     travelMode: "DRIVING",
-    fields: ["path", "distanceMeters", "durationMillis"],
+    fields: ["path", "distanceMeters", "durationMillis", "legs"],
   });
 
   const route = result.routes?.[0];
@@ -145,10 +145,17 @@ export async function computeRoute({ origin, destination, waypoints = [] }) {
     lng: typeof p.lng === "function" ? p.lng() : p.lng,
   }));
 
+  // Per-leg distance/time drives ETAs and per-day subtotals in the planner.
+  const legs = (route.legs || []).map((l) => ({
+    distanceMeters: l.distanceMeters || 0,
+    durationSeconds: Math.round((l.durationMillis || 0) / 1000),
+  }));
+
   return {
     distanceMeters: route.distanceMeters || 0,
     durationSeconds: Math.round((route.durationMillis || 0) / 1000),
     path,
+    legs,
   };
 }
 

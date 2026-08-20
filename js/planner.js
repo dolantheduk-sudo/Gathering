@@ -1,23 +1,27 @@
 // ─────────────────────────────────────────────────────────────
-//  Planner — build/edit a trip. The heart of the app.
+//  Planner — build/edit a trip. Day-grouped event timeline.
 // ─────────────────────────────────────────────────────────────
 
 import { config } from "./config.js";
 import * as maps from "./providers/maps-google.js";
 import * as store from "./store.js";
-import { fmtMiles, fmtDuration, debounce, el } from "./util.js";
+import { fmtMiles, fmtDuration, fmtTime, fmtDate, debounce, el } from "./util.js";
+import { CATEGORIES, CATEGORY_ORDER, catDef, defaultStay, buildTimeline, ENDPOINT_ICONS } from "./events.js";
 
 let map = null;
 let clearRoute = () => {};
 let trip = null;
-let mapClickMode = null;        // null | "origin" | "destination"
+let legs = [];                 // per-leg distance/time from the last route call
+let mapClickMode = null;       // null | "origin" | "destination"
+let pendingCategory = "sight"; // category chosen while adding a stop
 const recompute = debounce(runRoute, 450);
 
 export async function openPlanner(root, existingId) {
   trip = existingId ? structuredClone(store.getTrip(existingId)) : blankTrip();
+  legs = [];
   root.innerHTML = template(trip);
   wireControls(root);
-  renderStops(root);
+  renderTimeline(root);
 
   const mapEl = root.querySelector("#map");
   if (!config.GOOGLE_MAPS_API_KEY) { mapEl.classList.add("map--setup"); mapEl.innerHTML = setupNotice(); return; }
@@ -41,18 +45,22 @@ export async function openPlanner(root, existingId) {
 }
 
 function blankTrip() {
-  return { name: "", type: "line", origin: null, destination: null, stops: [], route: null, jar: { goal: 0, contributions: [] } };
+  return {
+    name: "", type: "line", origin: null, destination: null, stops: [],
+    route: null, jar: { goal: 0, contributions: [] },
+    startDate: null, departureTime: "08:00", dayStart: "09:00",
+  };
 }
 const hasEnds = () => trip.origin && trip.destination;
 const destLabel = () => (trip.type === "loop" ? "Turnaround point" : "Destination");
 
-// ── Setting origin / destination ─────────────────────────────
+// ── Origin / destination ─────────────────────────────────────
 function setPoint(which, pt, root) {
   trip[which] = pt;
   const cur = root.querySelector(which === "origin" ? "#origin-current" : "#dest-current");
   if (cur) cur.textContent = `Current: ${pt.label}`;
   recompute();
-  renderStops(root);
+  renderTimeline(root);
 }
 
 function setClickMode(mode, root) {
@@ -62,95 +70,161 @@ function setClickMode(mode, root) {
   if (map) map.getDiv().style.cursor = mode ? "crosshair" : "";
 }
 
-// ── Stops ────────────────────────────────────────────────────
+// ── Stop mutations ───────────────────────────────────────────
 function addStop(root) {
   const slot = root.querySelector("#stop-add-slot");
   if (!config.GOOGLE_MAPS_API_KEY || !map) {
     slot.innerHTML = `<p class="hint">Add your Google key in config.js to search for stops.</p>`;
     return;
   }
-  const wrap = el("div", "stop-adder ac-slot");
-  slot.replaceChildren(wrap);
-  maps.createAutocomplete(wrap, (pt) => {
-    trip.stops.push({ id: store.uid(), ...pt, notes: "" });
+  pendingCategory = "sight";
+  slot.innerHTML = `
+    <div class="adder">
+      <div class="adder__cats">
+        ${CATEGORY_ORDER.map((k) => `<button type="button" class="chip ${k === pendingCategory ? "is-on" : ""}" data-pcat="${k}">${CATEGORIES[k].icon} ${CATEGORIES[k].label}</button>`).join("")}
+      </div>
+      <div class="ac-slot" id="adder-ac"></div>
+    </div>`;
+  slot.querySelectorAll("[data-pcat]").forEach((b) =>
+    b.onclick = () => { pendingCategory = b.dataset.pcat; slot.querySelectorAll("[data-pcat]").forEach((x) => x.classList.toggle("is-on", x.dataset.pcat === pendingCategory)); });
+  maps.createAutocomplete(slot.querySelector("#adder-ac"), (pt) => {
+    trip.stops.push({ id: store.uid(), ...pt, notes: "", category: pendingCategory, tags: [], stayMin: null, cost: null });
     slot.replaceChildren();
-    renderStops(root); recompute();
+    renderTimeline(root); recompute();
   });
 }
-function removeStop(id, root) { trip.stops = trip.stops.filter((s) => s.id !== id); renderStops(root); recompute(); }
+function removeStop(id, root) { trip.stops = trip.stops.filter((s) => s.id !== id); renderTimeline(root); recompute(); }
 function moveStop(id, dir, root) {
   const i = trip.stops.findIndex((s) => s.id === id);
   const j = i + dir;
   if (i < 0 || j < 0 || j >= trip.stops.length) return;
   [trip.stops[i], trip.stops[j]] = [trip.stops[j], trip.stops[i]];
-  renderStops(root); recompute();
+  renderTimeline(root); recompute();
+}
+const findStop = (id) => trip.stops.find((s) => s.id === id);
+
+// ── The day-grouped timeline (editable) ──────────────────────
+function renderTimeline(root) {
+  const list = root.querySelector("#route-list");
+  const tl = buildTimeline(trip, legs);
+
+  list.innerHTML = tl.days.map((day) => {
+    const header = `
+      <div class="day-head">
+        <span class="day-head__n">Day ${day.index + 1}</span>
+        ${day.date ? `<span class="day-head__date">${fmtDate(day.date)}</span>` : ""}
+        <span class="day-head__drive">${day.driveMeters ? `🚗 ${fmtMiles(day.driveMeters)} · ${fmtDuration(day.driveSeconds)}` : ""}</span>
+      </div>`;
+    const items = day.items.map((pt) => renderItem(pt)).join("");
+    return `<div class="day">${header}<ol class="events">${items}</ol></div>`;
+  }).join("") + `<div id="stop-add-slot"></div>`;
+
+  wireTimeline(root);
 }
 
-// ── The signature: itinerary drawn as a vertical route ───────
-function renderStops(root) {
-  const list = root.querySelector("#route-list");
-  const node = (role, label, extra = "") => `
-    <li class="node node--${role}">
-      <span class="node__pin"></span>
-      <div class="node__body">${label}${extra}</div>
+function renderItem(pt) {
+  if (pt.kind !== "stop") {
+    const icon = ENDPOINT_ICONS[pt.kind] || "•";
+    const role = pt.kind === "origin" || pt.kind === "return" ? "origin"
+      : pt.kind === "apex" ? "apex" : "destination";
+    const tag = pt.kind === "origin" ? "Depart" : pt.kind === "return" ? "Return" : pt.kind === "apex" ? "Turnaround" : "Arrive";
+    return `
+      <li class="ev ev--end ev--${role}">
+        <span class="ev__pin">${icon}</span>
+        <div class="ev__main">
+          <div class="ev__top">
+            <span class="ev__name">${escapeHtml(pt.place?.label || "—")}</span>
+            <span class="ev__tag">${tag}</span>
+            <span class="ev__eta">${fmtTime(pt.etaMin)}</span>
+          </div>
+        </div>
+      </li>`;
+  }
+
+  const s = pt.stop;
+  const cat = s.category || "sight";
+  const def = catDef(cat);
+  const stay = s.stayMin != null ? s.stayMin : defaultStay(cat);
+  const catOpts = CATEGORY_ORDER.map((k) =>
+    `<option value="${k}" ${k === cat ? "selected" : ""}>${CATEGORIES[k].icon} ${CATEGORIES[k].label}</option>`).join("");
+  const tags = def.tags.map((t) =>
+    `<label class="pill ${s.tags?.includes(t) ? "is-on" : ""}"><input type="checkbox" data-tag="${s.id}" value="${t}" ${s.tags?.includes(t) ? "checked" : ""}>${t}</label>`).join("");
+
+  return `
+    <li class="ev ev--${cat}" data-id="${s.id}">
+      <span class="ev__pin">${def.icon}</span>
+      <div class="ev__main">
+        <div class="ev__top">
+          <select class="ev__cat" data-cat="${s.id}" aria-label="Category">${catOpts}</select>
+          <span class="ev__name">${escapeHtml(s.label)}</span>
+          <span class="ev__eta">${fmtTime(pt.etaMin)}</span>
+          <span class="ev__acts">
+            <button class="icon" data-move="${s.id}" data-dir="-1" aria-label="Move up">↑</button>
+            <button class="icon" data-move="${s.id}" data-dir="1" aria-label="Move down">↓</button>
+            <button class="icon" data-remove="${s.id}" aria-label="Remove">✕</button>
+          </span>
+        </div>
+        <div class="ev__meta">
+          <label class="mini">stay <input type="number" min="0" step="15" data-stay="${s.id}" value="${stay}"> min</label>
+          <label class="mini">$<input type="number" min="0" step="1" data-cost="${s.id}" value="${s.cost ?? ""}" placeholder="cost"></label>
+        </div>
+        <div class="ev__tags">${tags}</div>
+        <input class="ev__notes" data-notes="${s.id}" placeholder="Add a note…" value="${escapeHtml(s.notes || "")}">
+        ${s.photoUrl ? `<img class="ev__photo" src="${s.photoUrl}" alt="" loading="lazy">` : ""}
+      </div>
     </li>`;
+}
 
-  const originHtml = node("origin", trip.origin
-    ? `<span class="node__label">${escapeHtml(trip.origin.label)}</span><span class="node__tag">Start</span>`
-    : `<span class="node__label node__label--empty">Set a starting point</span>`);
-
-  const stopsHtml = trip.stops.map((s, i) => node("stop", `
-    <div class="node__row">
-      <span class="node__num">${i + 1}</span>
-      <span class="node__label">${escapeHtml(s.label)}</span>
-      <span class="node__acts">
-        <button class="icon" data-move="${s.id}" data-dir="-1" aria-label="Move up">↑</button>
-        <button class="icon" data-move="${s.id}" data-dir="1" aria-label="Move down">↓</button>
-        <button class="icon" data-remove="${s.id}" aria-label="Remove">✕</button>
-      </span>
-    </div>
-    <input class="node__notes" data-notes="${s.id}" placeholder="Add a note…" value="${escapeHtml(s.notes || "")}">
-    ${s.photoUrl ? `<img class="node__photo" src="${s.photoUrl}" alt="" loading="lazy">` : ""}
-  `)).join("");
-
-  const destHtml = node(trip.type === "loop" ? "apex" : "destination", trip.destination
-    ? `<span class="node__label">${escapeHtml(trip.destination.label)}</span><span class="node__tag">${destLabel()}</span>`
-    : `<span class="node__label node__label--empty">Set ${destLabel().toLowerCase()}</span>`);
-
-  const backHome = trip.type === "loop"
-    ? node("origin", `<span class="node__label node__label--muted">…back to ${trip.origin ? escapeHtml(trip.origin.label) : "start"}</span>`)
-    : "";
-
-  list.innerHTML = originHtml + stopsHtml + destHtml + backHome + `<div id="stop-add-slot"></div>`;
-
-  list.querySelectorAll("[data-move]").forEach((b) =>
-    b.onclick = () => moveStop(b.dataset.move, Number(b.dataset.dir), root));
-  list.querySelectorAll("[data-remove]").forEach((b) =>
-    b.onclick = () => removeStop(b.dataset.remove, root));
-  list.querySelectorAll("[data-notes]").forEach((inp) =>
-    inp.oninput = () => { const s = trip.stops.find((x) => x.id === inp.dataset.notes); if (s) s.notes = inp.value; });
+function wireTimeline(root) {
+  const list = root.querySelector("#route-list");
+  list.querySelectorAll("[data-move]").forEach((b) => b.onclick = () => moveStop(b.dataset.move, Number(b.dataset.dir), root));
+  list.querySelectorAll("[data-remove]").forEach((b) => b.onclick = () => removeStop(b.dataset.remove, root));
+  list.querySelectorAll("[data-cat]").forEach((sel) => sel.onchange = () => {
+    const s = findStop(sel.dataset.cat); if (!s) return;
+    s.category = sel.value; s.stayMin = null; s.tags = [];  // reset to new category's defaults
+    renderTimeline(root);                                   // day grouping may shift (sleep)
+  });
+  list.querySelectorAll("[data-stay]").forEach((inp) => inp.onchange = () => {
+    const s = findStop(inp.dataset.stay); if (s) { s.stayMin = Number(inp.value) || 0; renderTimeline(root); }
+  });
+  list.querySelectorAll("[data-cost]").forEach((inp) => inp.oninput = () => {
+    const s = findStop(inp.dataset.cost); if (s) s.cost = inp.value === "" ? null : Number(inp.value);
+  });
+  list.querySelectorAll("[data-notes]").forEach((inp) => inp.oninput = () => {
+    const s = findStop(inp.dataset.notes); if (s) s.notes = inp.value;
+  });
+  list.querySelectorAll("[data-tag]").forEach((cb) => cb.onchange = () => {
+    const s = findStop(cb.dataset.tag); if (!s) return;
+    s.tags = s.tags || [];
+    if (cb.checked) { if (!s.tags.includes(cb.value)) s.tags.push(cb.value); }
+    else s.tags = s.tags.filter((t) => t !== cb.value);
+    cb.closest(".pill")?.classList.toggle("is-on", cb.checked);
+  });
+  root.querySelector("#add-stop-again")?.addEventListener("click", () => addStop(root));
 }
 
 // ── Route computation + draw ─────────────────────────────────
 async function runRoute() {
   const readout = document.querySelector("#readout");
-  if (!hasEnds() || !map) { if (readout) readout.innerHTML = readoutHtml(null); return; }
+  if (!hasEnds() || !map) { legs = []; if (readout) readout.innerHTML = readoutHtml(null); return; }
 
-  const waypoints = trip.type === "loop"
-    ? [...trip.stops, trip.destination]           // loop: everything is a waypoint, end back at origin
-    : trip.stops;
+  const waypoints = trip.type === "loop" ? [...trip.stops, trip.destination] : trip.stops;
   const destination = trip.type === "loop" ? trip.origin : trip.destination;
 
   try {
     readout?.classList.add("is-loading");
     const r = await maps.computeRoute({ origin: trip.origin, destination, waypoints });
     trip.route = { distanceMeters: r.distanceMeters, durationSeconds: r.durationSeconds };
+    legs = r.legs || [];
 
     clearRoute();
     clearRoute = maps.drawRoute(map, { path: r.path, points: routePoints() });
     if (readout) readout.innerHTML = readoutHtml(trip.route);
+    renderTimeline(document.querySelector(".planner")?.parentElement || document);
   } catch (e) {
+    legs = [];
     if (readout) readout.innerHTML = readoutHtml(null, e.message);
+    renderTimeline(document.querySelector(".planner")?.parentElement || document);
   } finally {
     readout?.classList.remove("is-loading");
   }
@@ -167,12 +241,16 @@ function routePoints() {
 function wireControls(root) {
   root.querySelector("#trip-name").oninput = (e) => (trip.name = e.target.value);
 
+  root.querySelector("#start-date").onchange = (e) => { trip.startDate = e.target.value || null; renderTimeline(root); };
+  root.querySelector("#depart-time").onchange = (e) => { trip.departureTime = e.target.value || "08:00"; renderTimeline(root); };
+  root.querySelector("#day-start").onchange = (e) => { trip.dayStart = e.target.value || "09:00"; renderTimeline(root); };
+
   root.querySelectorAll("[data-type]").forEach((btn) => {
     btn.onclick = () => {
       trip.type = btn.dataset.type;
       root.querySelectorAll("[data-type]").forEach((b) => b.classList.toggle("is-on", b.dataset.type === trip.type));
       root.querySelector("#dest-label").textContent = destLabel();
-      renderStops(root); recompute();
+      renderTimeline(root); recompute();
     };
   });
 
@@ -184,6 +262,7 @@ function wireControls(root) {
   root.querySelector("#save-trip").onclick = () => {
     if (!trip.name.trim()) { flash(root, "Give the trip a name first."); return; }
     if (!hasEnds()) { flash(root, "Set a start and an end point first."); return; }
+    trip.legs = legs;   // persist per-leg data for the detail view's ETAs/subtotals
     const saved = store.saveTrip(trip);
     flash(root, "Saved for the whole Gathering.");
     location.hash = `#/trip/${saved.id}`;
@@ -200,6 +279,12 @@ function template(t) {
       <div class="seg" role="tablist" aria-label="Trip shape">
         <button class="seg__btn ${t.type === "line" ? "is-on" : ""}" data-type="line">Line — A to B</button>
         <button class="seg__btn ${t.type === "loop" ? "is-on" : ""}" data-type="loop">Loop — out & back</button>
+      </div>
+
+      <div class="dates">
+        <label class="mini">Start date <input type="date" id="start-date" value="${t.startDate || ""}"></label>
+        <label class="mini">Depart <input type="time" id="depart-time" value="${t.departureTime || "08:00"}"></label>
+        <label class="mini">Days start <input type="time" id="day-start" value="${t.dayStart || "09:00"}"></label>
       </div>
 
       <div class="field">
@@ -220,7 +305,7 @@ function template(t) {
         <p class="field__current" id="dest-current">${t.destination ? "Current: " + escapeHtml(t.destination.label) : ""}</p>
       </div>
 
-      <ol id="route-list" class="route-list"></ol>
+      <div id="route-list" class="route-list"></div>
 
       <button id="add-stop" class="btn btn--ghost">+ Add a stop</button>
 
@@ -259,4 +344,4 @@ function flash(root, msg) {
   setTimeout(() => f.classList.remove("show"), 2600);
 }
 
-function escapeHtml(s = "") { return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function escapeHtml(s = "") { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }

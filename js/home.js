@@ -4,7 +4,8 @@
 
 import * as store from "./store.js";
 import { renderJar } from "./jar.js";
-import { fmtMiles, fmtDuration } from "./util.js";
+import { fmtMiles, fmtDuration, fmtDate, fmtTime, countdownLabel } from "./util.js";
+import { buildTimeline, catDef, ENDPOINT_ICONS } from "./events.js";
 
 export function renderHome(root) {
   const trips = store.listTrips();
@@ -29,12 +30,22 @@ function card(t) {
   const totals = store.jarTotals(t);
   const pct = totals.goal ? Math.min(100, Math.round((totals.saved / totals.goal) * 100)) : 0;
   const hero = t.origin?.photoUrl || t.destination?.photoUrl || t.stops.find((s) => s.photoUrl)?.photoUrl;
+  const tl = buildTimeline(t, t.legs || []);
+  const dateBits = [];
+  if (t.startDate) dateBits.push(fmtDate(t.startDate));
+  dateBits.push(`${tl.numDays} day${tl.numDays === 1 ? "" : "s"}`);
+  const countdown = t.startDate ? countdownLabel(t.startDate) : "";
+
   return `
     <a class="trip-card" href="#/trip/${t.id}">
-      <div class="trip-card__media">${hero ? `<img src="${hero}" alt="" loading="lazy">` : `<span class="trip-card__badge">${t.type === "loop" ? "Loop" : "Line"}</span>`}</div>
+      <div class="trip-card__media">
+        ${hero ? `<img src="${hero}" alt="" loading="lazy">` : `<span class="trip-card__badge">${t.type === "loop" ? "Loop" : "Line"}</span>`}
+        ${countdown ? `<span class="trip-card__count">${countdown}</span>` : ""}
+      </div>
       <div class="trip-card__body">
         <h3 class="trip-card__name">${escapeHtml(t.name || "Untitled trip")}</h3>
         <p class="trip-card__route">${escapeHtml(t.origin?.label || "—")} <span class="arrow">${t.type === "loop" ? "↺" : "→"}</span> ${escapeHtml(t.destination?.label || "—")}</p>
+        <p class="trip-card__meta">${dateBits.join(" · ")}</p>
         <p class="trip-card__meta"><span class="mono">${miles}</span>${time ? ` · <span class="mono">${time}</span>` : ""} · ${t.stops.length} stop${t.stops.length === 1 ? "" : "s"}</p>
         ${totals.goal ? `<div class="mini-bar"><span style="width:${pct}%"></span></div>` : ""}
       </div>
@@ -54,18 +65,18 @@ export function renderTrip(root, id) {
   const t = store.getTrip(id);
   if (!t) { root.innerHTML = `<div class="empty"><h2>That trip's gone</h2><a class="btn" href="#/">Back to trips</a></div>`; return; }
 
-  const stops = [
-    { role: "start", label: t.origin?.label },
-    ...t.stops.map((s, i) => ({ role: "stop", n: i + 1, label: s.label, notes: s.notes, photo: s.photoUrl })),
-    { role: t.type === "loop" ? "apex" : "end", label: t.destination?.label },
-    ...(t.type === "loop" ? [{ role: "start", label: `back to ${t.origin?.label || "start"}`, muted: true }] : []),
-  ];
+  const tl = buildTimeline(t, t.legs || []);
+
+  const dateLine = t.startDate
+    ? `${fmtDate(t.startDate)}${tl.days.length > 1 ? " – " + fmtDate(tl.days[tl.days.length - 1].date) : ""}`
+    : `${tl.numDays} day${tl.numDays === 1 ? "" : "s"}`;
 
   root.innerHTML = `
     <section class="detail">
       <a class="back" href="#/">← Trips</a>
       <header class="detail__head">
         <h1>${escapeHtml(t.name || "Untitled trip")}</h1>
+        <p class="detail__dates">${dateLine}${t.startDate ? ` · <span class="mono">${countdownLabel(t.startDate)}</span>` : ""}</p>
         <div class="detail__stats">
           <span class="mono">${t.route ? fmtMiles(t.route.distanceMeters) : "—"}</span>
           ${t.route ? `<span class="mono">${fmtDuration(t.route.durationSeconds)}</span>` : ""}
@@ -78,21 +89,9 @@ export function renderTrip(root, id) {
       </header>
 
       <div class="detail__cols">
-        <ol class="route-list route-list--read">
-          ${stops.map((s) => `
-            <li class="node node--${s.role === "start" ? "origin" : s.role === "end" ? "destination" : s.role === "apex" ? "apex" : "stop"}">
-              <span class="node__pin"></span>
-              <div class="node__body">
-                <div class="node__row">
-                  ${s.n ? `<span class="node__num">${s.n}</span>` : ""}
-                  <span class="node__label ${s.muted ? "node__label--muted" : ""}">${escapeHtml(s.label || "—")}</span>
-                </div>
-                ${s.notes ? `<p class="node__noteline">${escapeHtml(s.notes)}</p>` : ""}
-                ${s.photo ? `<img class="node__photo" src="${s.photo}" alt="" loading="lazy">` : ""}
-              </div>
-            </li>`).join("")}
-        </ol>
-
+        <div class="timeline">
+          ${tl.days.map(readDay).join("")}
+        </div>
         <div id="jar-slot"></div>
       </div>
     </section>`;
@@ -101,6 +100,53 @@ export function renderTrip(root, id) {
   root.querySelector("[data-del]")?.addEventListener("click", () => {
     if (confirm("Delete this trip for the whole Gathering?")) { store.deleteTrip(id); location.hash = "#/"; }
   });
+}
+
+function readDay(day) {
+  const items = day.items.map(readItem).join("");
+  return `
+    <div class="day day--read">
+      <div class="day-head">
+        <span class="day-head__n">Day ${day.index + 1}</span>
+        ${day.date ? `<span class="day-head__date">${fmtDate(day.date)}</span>` : ""}
+        <span class="day-head__drive">${day.driveMeters ? `🚗 ${fmtMiles(day.driveMeters)} · ${fmtDuration(day.driveSeconds)}` : ""}</span>
+      </div>
+      <ol class="events">${items}</ol>
+    </div>`;
+}
+
+function readItem(pt) {
+  if (pt.kind !== "stop") {
+    const icon = ENDPOINT_ICONS[pt.kind] || "•";
+    const tag = pt.kind === "origin" ? "Depart" : pt.kind === "return" ? "Return" : pt.kind === "apex" ? "Turnaround" : "Arrive";
+    const role = pt.kind === "origin" || pt.kind === "return" ? "origin" : pt.kind === "apex" ? "apex" : "destination";
+    return `
+      <li class="ev ev--end ev--${role}">
+        <span class="ev__pin">${icon}</span>
+        <div class="ev__main"><div class="ev__top">
+          <span class="ev__name">${escapeHtml(pt.place?.label || "—")}</span>
+          <span class="ev__tag">${tag}</span>
+          <span class="ev__eta">${fmtTime(pt.etaMin)}</span>
+        </div></div>
+      </li>`;
+  }
+  const s = pt.stop;
+  const def = catDef(s.category);
+  const tags = (s.tags || []).map((x) => `<span class="pill pill--read is-on">${escapeHtml(x)}</span>`).join("");
+  return `
+    <li class="ev ev--${s.category || "sight"}">
+      <span class="ev__pin">${def.icon}</span>
+      <div class="ev__main">
+        <div class="ev__top">
+          <span class="ev__name">${escapeHtml(s.label)}</span>
+          <span class="ev__eta">${fmtTime(pt.etaMin)}</span>
+        </div>
+        ${tags ? `<div class="ev__tags">${tags}</div>` : ""}
+        ${s.cost != null ? `<p class="ev__cost mono">$${s.cost}</p>` : ""}
+        ${s.notes ? `<p class="ev__noteline">${escapeHtml(s.notes)}</p>` : ""}
+        ${s.photoUrl ? `<img class="ev__photo" src="${s.photoUrl}" alt="" loading="lazy">` : ""}
+      </div>
+    </li>`;
 }
 
 function escapeHtml(s = "") { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }

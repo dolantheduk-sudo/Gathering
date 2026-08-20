@@ -19,6 +19,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { config } from "./config.js";
+import { migrateStop } from "./events.js";
 
 const KEY = "gathering:v1";
 
@@ -53,10 +54,26 @@ export function joinGathering(gatheringName, memberName) {
 
 // ── Trips ────────────────────────────────────────────────────
 export function listTrips() {
-  return Object.values(read().trips).sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+  return Object.values(read().trips)
+    .map(migrateTrip)
+    .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
 }
 export function getTrip(id) {
-  return read().trips[id] || null;
+  const t = read().trips[id];
+  return t ? migrateTrip(t) : null;
+}
+
+// Bring older/partial trips up to the current event+dates shape on read,
+// so new code can assume the full model without breaking saved trips.
+function migrateTrip(t) {
+  return {
+    ...t,
+    startDate: t.startDate || null,
+    departureTime: t.departureTime || "08:00",
+    dayStart: t.dayStart || "09:00",
+    legs: Array.isArray(t.legs) ? t.legs : [],
+    stops: (t.stops || []).map(migrateStop),
+  };
 }
 export function saveTrip(trip) {
   const s = read();
