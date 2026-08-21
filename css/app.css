@@ -718,3 +718,35 @@ body {
 
 /* Deco flourish flanking the trip-detail title */
 .detail__head h1::before { content: "❖ "; color: var(--route); font-size: .7em; vertical-align: middle; }
+
+/* ═══════════════════════════════════════════════════════════
+   Bolder deco — make the panels and texture unmistakable
+   ═══════════════════════════════════════════════════════════ */
+:root {
+  --paper: #e3d8b8;   /* deeper cream so ivory panels clearly float */
+  --card:  #f9f4e7;   /* bright ivory */
+}
+/* More present wallpaper texture */
+body {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M24 2L46 24L24 46L2 24Z' fill='none' stroke='%231a6045' stroke-width='0.9' opacity='0.22'/%3E%3C/svg%3E") repeat,
+    radial-gradient(900px 480px at 106% -6%, rgba(201,162,39,.34), transparent 62%),
+    radial-gradient(840px 500px at -8% -4%, rgba(31,107,79,.34), transparent 60%),
+    radial-gradient(760px 520px at 50% 122%, rgba(156,90,44,.18), transparent 62%),
+    var(--paper);
+  background-attachment: fixed;
+}
+/* Unmistakably framed panels: gold top edge + real border + lift */
+.trip-card, .planner__panel, .jar, .crew__card, .onboard__card, .timeline, .detail__side .jar {
+  border: 1.5px solid color-mix(in srgb, var(--route) 45%, var(--line));
+  border-top: 4px solid var(--route);
+  box-shadow: 0 2px 4px rgba(38,35,28,.10), 0 14px 34px rgba(15,59,41,.16);
+}
+.trip-card { border-top: 1.5px solid color-mix(in srgb, var(--route) 45%, var(--line)); }
+.trip-card__media { border-top: 4px solid var(--accent); }
+/* Timeline: clearly a card with breathing room */
+.timeline { padding: 1.4rem 1.6rem; background: var(--card); }
+/* Stronger inner gold frame */
+.jar::after, .crew__card::after, .planner__panel::after, .onboard__card::after, .timeline::after {
+  border-color: color-mix(in srgb, var(--route) 55%, transparent);
+}
