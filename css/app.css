@@ -750,3 +750,15 @@ body {
 .jar::after, .crew__card::after, .planner__panel::after, .onboard__card::after, .timeline::after {
   border-color: color-mix(in srgb, var(--route) 55%, transparent);
 }
+
+/* Let the wallpaper scroll with the page — a fixed background seams a faint
+   line across long pages in some browsers. */
+body { background-attachment: scroll; }
+
+/* Guarantee the detail timeline's inner padding (higher specificity wins),
+   and stop inputs / long names from pushing content past the right edge. */
+.detail .timeline { padding: 1.5rem 2rem; }
+.ev__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmt-in, .ev__notes, .ev__mini-in { min-width: 0; }
+.ev__top { padding-right: .1rem; }
+.day-head { padding-right: .1rem; }
