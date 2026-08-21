@@ -670,3 +670,51 @@ body {
 .crew__invite { font-size: .85rem; color: var(--slate); margin: 0 0 1rem; }
 .crew__loading { color: var(--slate); font-size: .88rem; list-style: none; }
 @media (max-width: 760px) { .crew__cols { grid-template-columns: 1fr; } }
+
+/* ═══════════════════════════════════════════════════════════
+   Deco flair — texture, framed panels, divider motifs
+   ═══════════════════════════════════════════════════════════ */
+
+/* Faint diamond-lattice wallpaper behind everything */
+body {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M23 3L43 23L23 43L3 23Z' fill='none' stroke='%231a6045' stroke-width='0.6' opacity='0.13'/%3E%3C/svg%3E") repeat,
+    radial-gradient(900px 480px at 106% -6%, rgba(201,162,39,.30), transparent 62%),
+    radial-gradient(840px 500px at -8% -4%, rgba(31,107,79,.30), transparent 60%),
+    radial-gradient(760px 520px at 50% 122%, rgba(156,90,44,.15), transparent 62%),
+    var(--paper);
+  background-attachment: fixed;
+}
+
+/* Frame the trip-detail timeline as a proper panel (fixes edge crowding) */
+.timeline {
+  background: var(--card);
+  border: 1px solid color-mix(in srgb, var(--route) 32%, var(--line));
+  border-radius: var(--r);
+  padding: 1.3rem 1.5rem;
+  box-shadow: 0 1px 2px rgba(38,35,28,.07), 0 10px 30px rgba(31,107,79,.10);
+  position: relative;
+}
+
+/* Deco inner gold frame on solid panels */
+.jar, .crew__card, .planner__panel, .onboard__card, .timeline { position: relative; }
+.jar::after, .crew__card::after, .planner__panel::after, .onboard__card::after, .timeline::after {
+  content: ""; position: absolute; inset: 5px; border-radius: calc(var(--r) - 3px);
+  border: 1px solid color-mix(in srgb, var(--route) 36%, transparent);
+  pointer-events: none;
+}
+
+/* Deco line–diamond–line divider under page titles */
+.home__title::after {
+  content: ""; display: block; height: 12px; width: 118px; margin-top: 9px; border-radius: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='118' height='12'%3E%3Cline x1='0' y1='6' x2='47' y2='6' stroke='%23c9a227' stroke-width='1.5'/%3E%3Cpath d='M59 1L64 6L59 11L54 6Z' fill='%231a6045'/%3E%3Cline x1='71' y1='6' x2='118' y2='6' stroke='%23c9a227' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat;
+}
+
+/* Richer card hover */
+.trip-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(38,35,28,.10), 0 26px 52px color-mix(in srgb, var(--pine) 24%, transparent);
+}
+
+/* Deco flourish flanking the trip-detail title */
+.detail__head h1::before { content: "❖ "; color: var(--route); font-size: .7em; vertical-align: middle; }
