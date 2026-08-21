@@ -481,3 +481,42 @@ body {
 .chk__i .icon { margin-left: auto; opacity: .5; }
 .chk__i:hover .icon { opacity: 1; }
 .chk__empty { font-size: .84rem; color: var(--slate); }
+
+/* ── Map upgrades: bigger map + recenter button ───────────── */
+.map { height: 640px; }
+.planner__map { position: sticky; top: 5rem; }
+.map-fit {
+  position: absolute; top: .7rem; left: .7rem; z-index: 5;
+  font-family: var(--body); font-size: .78rem; font-weight: 700;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: .35rem .7rem; cursor: pointer; box-shadow: var(--shadow);
+}
+.map-fit:hover { border-color: var(--pine); color: var(--pine); }
+@media (max-width: 900px) { .map { height: 380px; } }
+
+/* ── Sunnier palette: more green + yellow across the canvas ── */
+body {
+  background:
+    radial-gradient(880px 460px at 106% -8%, rgba(245,181,45,.20), transparent 60%),
+    radial-gradient(820px 480px at -8% -6%, rgba(47,158,99,.22), transparent 58%),
+    radial-gradient(760px 520px at 50% 120%, rgba(245,181,45,.13), transparent 60%),
+    var(--paper);
+  background-attachment: fixed;
+}
+.topbar::after {
+  background: linear-gradient(90deg, var(--pine), var(--yellow) 40%, var(--teal) 70%, var(--pine));
+}
+.home__title::after { background: linear-gradient(90deg, var(--yellow), var(--pine)); }
+.eyebrow { color: var(--pine-deep); }
+/* Warm the card accent rotation toward greens/yellows */
+.trip-card { --accent: var(--pine); }
+.trip-card:nth-child(6n+2) { --accent: var(--yellow); }
+.trip-card:nth-child(6n+3) { --accent: var(--teal); }
+.trip-card:nth-child(6n+4) { --accent: var(--clay); }
+.trip-card:nth-child(6n+5) { --accent: var(--blue); }
+.trip-card:nth-child(6n+6) { --accent: var(--purple); }
+.trip-card__meta .mono { color: var(--pine-deep); }
+/* Buttons get a hair sunnier on hover */
+.btn--solid { background: linear-gradient(135deg, var(--pine), #35b06f); }
+.readout { border-top-color: var(--yellow); }

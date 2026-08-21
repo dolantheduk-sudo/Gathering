@@ -15,6 +15,7 @@ let legs = [];                 // per-leg distance/time from the last route call
 let mapClickMode = null;       // null | "origin" | "destination"
 let pendingCategory = "sight"; // category chosen while adding a stop
 let sortables = [];            // active SortableJS instances
+let lastPoints = [];           // route points for the recenter button
 const recompute = debounce(runRoute, 450);
 
 export async function openPlanner(root, existingId) {
@@ -33,11 +34,23 @@ export async function openPlanner(root, existingId) {
     maps.createAutocomplete(root.querySelector("#origin-ac"), (pt) => setPoint("origin", pt, root));
     maps.createAutocomplete(root.querySelector("#dest-ac"), (pt) => setPoint("destination", pt, root));
     map.addListener("click", async (e) => {
-      if (!mapClickMode) return;
-      const pt = await maps.pointFromClick(e.latLng);
-      setPoint(mapClickMode, pt, root);
-      setClickMode(null, root);
+      if (mapClickMode) {
+        const pt = await maps.pointFromClick(e.latLng);
+        setPoint(mapClickMode, pt, root);
+        setClickMode(null, root);
+      } else {
+        // No mode armed → drop a new stop right where you clicked.
+        const pt = await maps.pointFromClick(e.latLng);
+        trip.stops.push({
+          id: store.uid(), ...pt, notes: "", category: "sight",
+          tags: [], stayMin: null, cost: null,
+          addedBy: store.getSession().me, surprise: false, reactions: {}, comments: [],
+        });
+        renderTimeline(root); recompute();
+      }
     });
+    const fitBtn = root.querySelector("#map-fit");
+    if (fitBtn) fitBtn.onclick = () => { if (lastPoints.length) maps.fitPoints(map, lastPoints); };
     if (hasEnds()) runRoute();
   } catch (err) {
     mapEl.classList.add("map--setup");
@@ -286,8 +299,13 @@ async function runRoute() {
     trip.route = { distanceMeters: r.distanceMeters, durationSeconds: r.durationSeconds };
     legs = r.legs || [];
 
+    lastPoints = routePoints();
     clearRoute();
-    clearRoute = maps.drawRoute(map, { path: r.path, points: routePoints() }, { onPointClick: focusStopCard });
+    clearRoute = maps.drawRoute(
+      map,
+      { path: r.path, legPaths: r.legPaths, points: lastPoints, isLoop: trip.type === "loop" },
+      { onPointClick: focusStopCard, onPointDrag: handlePinDrag },
+    );
     if (readout) readout.innerHTML = readoutHtml(trip.route);
     renderTimeline(document.querySelector(".planner")?.parentElement || document);
   } catch (e) {
@@ -300,10 +318,32 @@ async function runRoute() {
 }
 
 function routePoints() {
-  const pts = [{ ...trip.origin, role: "origin", label: trip.origin.label }];
-  trip.stops.forEach((s, i) => pts.push({ ...s, role: "stop", index: i + 1, label: s.label, stopId: s.id }));
-  pts.push({ ...trip.destination, role: trip.type === "loop" ? "apex" : "destination", label: trip.destination.label });
+  const tl = buildTimeline(trip, legs);
+  const etaById = {};
+  tl.days.forEach((d) => d.items.forEach((it) => { etaById[it.id] = it.etaMin; }));
+  const eta = (id) => (etaById[id] != null ? fmtTime(etaById[id]) : "");
+
+  const pts = [{ ...trip.origin, role: "origin", label: trip.origin.label, eta: eta("__origin") }];
+  trip.stops.forEach((s, i) => pts.push({ ...s, role: "stop", index: i + 1, label: s.label, stopId: s.id, category: s.category, eta: eta(s.id) }));
+  pts.push({ ...trip.destination, role: trip.type === "loop" ? "apex" : "destination", label: trip.destination.label, eta: eta("__dest") });
   return pts;
+}
+
+// Dragging a pin to a new location: re-geocode + reroute.
+async function handlePinDrag(pt, latLng) {
+  const geo = await maps.pointFromClick(latLng);
+  if (pt.role === "origin") { trip.origin = geo; setCurrent("origin", geo); }
+  else if (pt.role === "destination" || pt.role === "apex") { trip.destination = geo; setCurrent("dest", geo); }
+  else if (pt.stopId) {
+    const s = trip.stops.find((x) => x.id === pt.stopId);
+    if (s) { s.lat = geo.lat; s.lng = geo.lng; s.label = geo.label; s.placeId = geo.placeId; s.photoUrl = null; }
+  }
+  renderTimeline(document.querySelector(".planner")?.parentElement || document);
+  recompute();
+}
+function setCurrent(which, pt) {
+  const cur = document.querySelector(which === "origin" ? "#origin-current" : "#dest-current");
+  if (cur) cur.textContent = `Current: ${pt.label}`;
 }
 
 // Map → timeline: clicking a stop marker highlights and scrolls to its card.
@@ -396,6 +436,7 @@ function template(t) {
 
     <div class="planner__map">
       <div id="map" class="map"></div>
+      <button id="map-fit" class="map-fit" title="Recenter on route">⤢ Fit</button>
       <div id="readout" class="readout">${readoutHtml(t.route)}</div>
     </div>
   </section>`;
