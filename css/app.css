@@ -805,3 +805,14 @@ body {
    decorative ::after gold frame escaped and bordered the whole viewport.
    Anchoring them keeps the frame inside the panel where it belongs. */
 .detail__side .jar { position: relative; }
+
+/* Make the timeline's filled/shadowed "box" invisible — keep only the gold
+   frame. Text now sits on the parchment, well inside the frame. */
+.detail .timeline {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 1.4rem 2rem !important;
+}
+.detail .timeline .ev__top,
+.detail .timeline .day-head,
+.detail .timeline .cmt-add { padding-right: .5rem; }
