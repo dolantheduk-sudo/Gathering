@@ -781,3 +781,22 @@ body::before {
     radial-gradient(840px 500px at -8% -4%, rgba(31,107,79,.28), transparent 60%),
     radial-gradient(760px 520px at 50% 122%, rgba(156,90,44,.14), transparent 62%);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   NUCLEAR background reset — the gold line was gradient banding
+   (transparent-through-black) on the fixed backdrop. Remove the
+   backdrop entirely; keep only the scrolling texture. No gradient,
+   no fixed layer → no line is possible.
+   ═══════════════════════════════════════════════════════════ */
+body::before { display: none !important; }
+body {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M24 2L46 24L24 46L2 24Z' fill='none' stroke='%231a6045' stroke-width='0.9' opacity='0.20'/%3E%3C/svg%3E") repeat,
+    var(--paper) !important;
+  background-attachment: scroll !important;
+}
+
+/* Names wrap instead of truncating; give the times real breathing room */
+.ev__name { overflow: visible; text-overflow: clip; white-space: normal; min-width: 0; }
+.detail .timeline { padding: 1.5rem 2.25rem; }
+.ev__eta, .day-head__drive { padding-left: .5rem; }
