@@ -4,7 +4,7 @@
    Signature: the itinerary rendered as a vertical dashed route.
    ───────────────────────────────────────────────────────────── */
 
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Space+Mono:wght@400;700&family=Cinzel:wght@500;600;700&display=swap');
 
 :root {
   --paper:   #edf2e0;
@@ -590,3 +590,33 @@ body {
 
 /* Read-only route map on the trip detail page */
 .map--detail { height: 360px; margin: .4rem 0 1.5rem; }
+
+/* ═══════════════════════════════════════════════════════════
+   Deco typography + gold framing — the Grand Hotel finish
+   ═══════════════════════════════════════════════════════════ */
+:root { --deco: "Cinzel", Georgia, serif; }
+
+.wordmark {
+  font-family: var(--deco); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .12em;
+}
+.home__title, .detail__head h1, .onboard h1 {
+  font-family: var(--deco); font-weight: 600; letter-spacing: .015em;
+}
+.trip-card__name { font-family: var(--deco); font-weight: 600; letter-spacing: .01em; }
+.eyebrow { font-family: var(--mono); }
+
+/* Gold hairline framing, like a pressed hotel menu */
+.trip-card, .planner__panel, .jar, .onboard__card, .detail__side .jar {
+  border: 1px solid color-mix(in srgb, var(--route) 32%, var(--line));
+}
+/* A thin gold rule at the top of key panels */
+.home__head { border-bottom: 2px solid color-mix(in srgb, var(--route) 45%, var(--line)); padding-bottom: 1rem; }
+.detail__head { border-bottom: 2px solid color-mix(in srgb, var(--route) 45%, var(--line)); padding-bottom: 1rem; }
+
+/* Deco double-rule under the wordmark's diamond */
+.topbar .wordmark { position: relative; }
+
+/* Grander page title */
+.home__title { font-size: 2.4rem; }
+.detail__head h1 { font-size: 2.2rem; }

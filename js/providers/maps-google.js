@@ -190,15 +190,19 @@ let _infoWin = null;
 export function drawRoute(map, { segments, path, points }, opts = {}) {
   const overlays = [];
   const arrow = { icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 3, strokeColor: "#5c4a1e", strokeWeight: 1, fillColor: "#5c4a1e", fillOpacity: 1 }, offset: "10%", repeat: "150px" };
+  const ghostArrow = { icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 2.2, strokeColor: "#9c7b2e", strokeWeight: 1, fillColor: "#9c7b2e", fillOpacity: 0.7 }, offset: "22%", repeat: "170px" };
 
   const addLine = (pts, ghost) => {
     if (!pts?.length) return;
+    // The drive home often reuses the outbound road; nudge it sideways so it
+    // reads as a separate faded lane instead of hiding under the solid line.
+    const drawn = ghost ? offsetPath(pts, 0.0045) : pts;
     overlays.push(new google.maps.Polyline({
-      path: pts, geodesic: true,
-      strokeColor: ghost ? "#9c7b2e" : "#C9A227",   // gold; faded for the drive home
-      strokeOpacity: ghost ? 0.4 : 0.95,
+      path: drawn, geodesic: true,
+      strokeColor: ghost ? "#9c7b2e" : "#C9A227",
+      strokeOpacity: ghost ? 0.5 : 0.95,
       strokeWeight: ghost ? 3 : 5,
-      icons: ghost ? [] : [arrow],
+      icons: [ghost ? ghostArrow : arrow],
       map, zIndex: ghost ? 1 : 2,
     }));
   };
@@ -249,6 +253,19 @@ function pinIcon(pt) {
 }
 
 function escapeAttr(s = "") { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+// Shift a lat/lng path sideways by ~d degrees, perpendicular to its direction,
+// so an out-and-back's return lane runs beside the outbound instead of on it.
+function offsetPath(path, d) {
+  if (path.length < 2) return path;
+  return path.map((p, i) => {
+    const a = path[Math.max(0, i - 1)], b = path[Math.min(path.length - 1, i + 1)];
+    const dLat = b.lat - a.lat, dLng = b.lng - a.lng;
+    const len = Math.hypot(dLat, dLng) || 1;
+    // perpendicular to tangent (dLng, dLat) is (-dLat, dLng)
+    return { lat: p.lat + (dLng / len) * d, lng: p.lng + (-dLat / len) * d };
+  });
+}
 
 // Warm parchment map style so the gold route reads like ink on old paper.
 const MAP_STYLE = [
