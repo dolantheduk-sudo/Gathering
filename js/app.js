@@ -139,7 +139,7 @@ function renderOnboarding() {
 
 // ── Top chrome / tabs ────────────────────────────────────────
 function renderChrome() {
-  const { gathering } = store.getSession();
+  const { gathering, me, avatar } = store.getSession();
   chrome.hidden = false;
   chrome.innerHTML = `
     <div class="topbar">
@@ -147,10 +147,11 @@ function renderChrome() {
       <nav class="tabs">
         <a href="#/" data-tab="home">Trips</a>
         <a href="#/plan" data-tab="plan">Plan</a>
+        <a href="#/crew" data-tab="crew">Crew</a>
       </nav>
       <div class="topbar__right">
         ${gathering?.joinCode ? `<span class="code-chip" title="Share this to invite people">Code <b>${gathering.joinCode}</b></span>` : ""}
-        <span class="gname">${escapeHtml(gathering?.name || "")}</span>
+        <a class="me-chip" href="#/crew"><span class="me-chip__av">${avatar || "🧭"}</span> ${escapeHtml(me || "")}</a>
         ${isSupa() ? `<button class="link" id="signout">Sign out</button>` : ""}
       </div>
     </div>`;
@@ -168,8 +169,74 @@ function route() {
   const [, seg, arg] = h.split("/");
   if (!seg) { markTab("home"); return renderHome(view); }
   if (seg === "plan") { markTab("plan"); return openPlanner(view, arg || null); }
+  if (seg === "crew") { markTab("crew"); return renderCrew(view); }
   if (seg === "trip" && arg) { markTab("home"); return renderTrip(view, arg); }
   markTab("home"); renderHome(view);
+}
+
+const AVATARS = ["🧭","🎒","🚗","🗺️","⛰️","🏕️","🏖️","🌲","🦊","🐻","🦉","🌵","🍕","🎸","📷","⚓","🎩","🌙","☀️","🍄","🐢","🦅","🎯","🧳"];
+
+async function renderCrew(view) {
+  const { gathering, me, avatar } = store.getSession();
+  view.innerHTML = `
+    <section class="crew">
+      <p class="eyebrow">${escapeHtml(gathering?.name || "Your Gathering")}</p>
+      <h1 class="home__title">Crew</h1>
+
+      <div class="crew__cols">
+        <div class="crew__card">
+          <h2>Your profile</h2>
+          <div class="prof-av" id="prof-av">${avatar || "🧭"}</div>
+          <div class="av-grid">
+            ${AVATARS.map((e) => `<button class="av-opt ${e === avatar ? "is-on" : ""}" data-av="${e}">${e}</button>`).join("")}
+          </div>
+          <label class="field"><span class="field__label">Display name</span>
+            <input id="prof-name" class="input" value="${escapeHtml(me || "")}"></label>
+          <button id="prof-save" class="btn btn--solid">Save profile</button>
+          <span id="prof-flash" class="flash"></span>
+        </div>
+
+        <div class="crew__card">
+          <h2>Members</h2>
+          ${gathering?.joinCode ? `<p class="crew__invite">Invite with code <b class="mono">${gathering.joinCode}</b></p>` : ""}
+          <ul class="member-list" id="member-list"><li class="crew__loading">Loading…</li></ul>
+        </div>
+      </div>
+    </section>`;
+
+  let picked = avatar || "🧭";
+  view.querySelectorAll("[data-av]").forEach((b) => b.onclick = () => {
+    picked = b.dataset.av;
+    view.querySelector("#prof-av").textContent = picked;
+    view.querySelectorAll("[data-av]").forEach((x) => x.classList.toggle("is-on", x.dataset.av === picked));
+  });
+  view.querySelector("#prof-save").onclick = async () => {
+    const name = view.querySelector("#prof-name").value.trim() || me;
+    try {
+      await store.updateProfileAsync(name, picked);
+      const f = view.querySelector("#prof-flash"); f.textContent = "Saved!"; f.classList.add("show");
+      renderChrome();
+      loadMembers(view);
+    } catch (e) { const f = view.querySelector("#prof-flash"); f.textContent = friendly(e); f.classList.add("show"); }
+  };
+
+  loadMembers(view);
+}
+
+async function loadMembers(view) {
+  const ul = view.querySelector("#member-list");
+  if (!ul) return;
+  try {
+    const members = await store.listMembersAsync();
+    const { me } = store.getSession();
+    ul.innerHTML = members.map((m) => `
+      <li class="member">
+        <span class="member__av">${m.avatar || "🧭"}</span>
+        <span class="member__name">${escapeHtml(m.name)}${m.name === me ? ` <span class="member__you">you</span>` : ""}</span>
+      </li>`).join("") || `<li class="crew__loading">No one yet.</li>`;
+  } catch (e) {
+    ul.innerHTML = `<li class="crew__loading">Couldn't load members — ${escapeHtml(friendly(e))}</li>`;
+  }
 }
 
 // ── Helpers ──────────────────────────────────────────────────

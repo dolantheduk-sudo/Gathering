@@ -620,3 +620,53 @@ body {
 /* Grander page title */
 .home__title { font-size: 2.4rem; }
 .detail__head h1 { font-size: 2.2rem; }
+
+/* ═══════════════════════════════════════════════════════════
+   Deep emerald + Crew/profiles + right-edge fix
+   ═══════════════════════════════════════════════════════════ */
+
+/* Richer, darker greens */
+:root { --pine: #1a6045; --pine-deep: #0f3b29; }
+
+/* Deep emerald hotel-lobby top bar */
+.topbar { background: linear-gradient(180deg, #12432f, #0e3323); border-bottom: 2px solid var(--route); }
+.topbar::after { display: none; }
+.topbar .wordmark { background: linear-gradient(92deg, #ecd9a0, var(--route)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.topbar .wordmark::before { -webkit-text-fill-color: var(--route); }
+.tabs a { color: #bcd6c6; }
+.tabs a:hover { color: #fff; }
+.tabs a.is-active { background: rgba(255,255,255,.14); color: #fff; }
+.code-chip { color: #ecd9a0; background: rgba(255,255,255,.08); border-color: rgba(236,217,160,.4); }
+.topbar__right .link { color: #ecd9a0; }
+.me-chip { display: inline-flex; align-items: center; gap: .4rem; color: #ece3cb; font-weight: 600; font-size: .9rem; }
+.me-chip:hover { color: #fff; }
+.me-chip__av { font-size: 1.15rem; }
+
+/* Emerald titles */
+.home__title, .detail__head h1, .trip-card__name, .detail__dates { color: var(--pine-deep); }
+.home__title { color: var(--pine-deep); }
+.btn--solid { background: linear-gradient(135deg, #1a6045, #0f3b29); }
+.btn--solid:hover { background: linear-gradient(135deg, #0f3b29, #1a6045); }
+
+/* Right-edge breathing room in the detail timeline */
+.timeline { padding-right: 1.25rem; }
+@media (max-width: 900px) { .timeline { padding-right: 0; } }
+
+/* Crew / profiles */
+.crew { max-width: 920px; }
+.crew__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; margin-top: 1.3rem; align-items: start; }
+.crew__card { background: var(--card); border: 1px solid color-mix(in srgb, var(--route) 32%, var(--line)); border-radius: var(--r); padding: 1.4rem; box-shadow: var(--shadow); }
+.crew__card h2 { font-family: var(--deco); font-size: 1.35rem; color: var(--pine-deep); margin-bottom: 1rem; }
+.prof-av { font-size: 3.4rem; text-align: center; margin: .2rem 0 1rem; }
+.av-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: .35rem; margin-bottom: 1.1rem; }
+.av-opt { font-size: 1.3rem; padding: .3rem; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); cursor: pointer; line-height: 1; }
+.av-opt:hover { border-color: var(--pine); }
+.av-opt.is-on { border-color: var(--route); background: color-mix(in srgb, var(--route) 16%, var(--card)); transform: scale(1.06); }
+.member-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+.member { display: flex; align-items: center; gap: .7rem; padding: .5rem .6rem; border-radius: 10px; background: var(--paper); }
+.member__av { font-size: 1.5rem; }
+.member__name { font-weight: 600; }
+.member__you { font-family: var(--mono); font-size: .6rem; text-transform: uppercase; letter-spacing: .1em; color: var(--pine); border: 1px solid var(--pine); border-radius: 5px; padding: .05rem .3rem; }
+.crew__invite { font-size: .85rem; color: var(--slate); margin: 0 0 1rem; }
+.crew__loading { color: var(--slate); font-size: .88rem; list-style: none; }
+@media (max-width: 760px) { .crew__cols { grid-template-columns: 1fr; } }

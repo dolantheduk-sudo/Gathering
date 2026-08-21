@@ -36,16 +36,31 @@ export async function getUser() {
 export async function getMembership() {
   const { data, error } = await client()
     .from("memberships")
-    .select("gathering_id, display_name, gatherings(name, join_code)")
+    .select("gathering_id, display_name, avatar, gatherings(name, join_code)")
     .limit(1).maybeSingle();
   if (error) throw error;
   if (!data) return null;
   return {
     gatheringId: data.gathering_id,
     displayName: data.display_name,
+    avatar: data.avatar || "🧭",
     name: data.gatherings?.name,
     joinCode: data.gatherings?.join_code,
   };
+}
+
+export async function listMembers(gatheringId) {
+  const { data, error } = await client()
+    .from("memberships").select("user_id, display_name, avatar").eq("gathering_id", gatheringId);
+  if (error) throw error;
+  return (data || []).map((m) => ({ id: m.user_id, name: m.display_name, avatar: m.avatar || "🧭" }));
+}
+
+export async function updateProfile(gatheringId, userId, name, avatar) {
+  const { error } = await client()
+    .from("memberships").update({ display_name: name, avatar })
+    .eq("gathering_id", gatheringId).eq("user_id", userId);
+  if (error) throw error;
 }
 export async function createGathering(name, displayName) {
   const { data, error } = await client().rpc("create_gathering", { p_name: name, p_display: displayName });

@@ -15,7 +15,7 @@ import { migrateStop } from "./events.js";
 const LOCAL_KEY = "gathering:v1";
 const isSupa = () => config.BACKEND === "supabase";
 
-let cache = { gathering: null, me: null, trips: {} };
+let cache = { gathering: null, me: null, avatar: "🧭", trips: {} };
 let userId = null;
 let unsub = null;
 let dataCb = () => {};
@@ -62,6 +62,7 @@ export async function initSession() {
 function setGathering(m) {
   cache.gathering = { id: m.gatheringId, name: m.name, joinCode: m.joinCode, members: [] };
   cache.me = m.displayName;
+  cache.avatar = m.avatar || "🧭";
 }
 async function hydrate() {
   const api = await sb();
@@ -96,7 +97,30 @@ export async function joinGatheringCodeAsync(code, display) {
 }
 
 // ── Session / membership ─────────────────────────────────────
-export function getSession() { return { gathering: cache.gathering, me: cache.me }; }
+export function getSession() { return { gathering: cache.gathering, me: cache.me, avatar: cache.avatar }; }
+
+export async function listMembersAsync() {
+  if (isSupa()) return (await sb()).listMembers(cache.gathering.id);
+  return (cache.gathering?.members || [cache.me]).map((n) => ({
+    name: n, avatar: n === cache.me ? cache.avatar : "🧭",
+  }));
+}
+
+export async function updateProfileAsync(name, avatar) {
+  const prev = cache.me;
+  cache.me = name || cache.me;
+  cache.avatar = avatar || cache.avatar;
+  if (isSupa()) {
+    await (await sb()).updateProfile(cache.gathering.id, userId, cache.me, cache.avatar);
+  } else {
+    if (cache.gathering?.members) {
+      cache.gathering.members = cache.gathering.members.map((n) => (n === prev ? cache.me : n));
+      if (!cache.gathering.members.includes(cache.me)) cache.gathering.members.push(cache.me);
+    }
+    persistLocal();
+  }
+  return { me: cache.me, avatar: cache.avatar };
+}
 
 // Local-mode onboarding (unchanged behaviour)
 export function joinGathering(gatheringName, memberName) {
@@ -215,13 +239,13 @@ export function onData(cb) { dataCb = cb; }
 function loadLocal() {
   try {
     const s = JSON.parse(localStorage.getItem(LOCAL_KEY));
-    if (s) { cache = { gathering: s.gathering, me: s.me, trips: {} };
+    if (s) { cache = { gathering: s.gathering, me: s.me, avatar: s.avatar || "🧭", trips: {} };
       for (const [id, t] of Object.entries(s.trips || {})) cache.trips[id] = normalize(t); }
   } catch { /* fresh */ }
   window.addEventListener("storage", (e) => { if (e.key === LOCAL_KEY) { loadLocal(); dataCb(); } });
 }
 function persistLocal() {
-  const blob = { gathering: cache.gathering, me: cache.me, trips: cache.trips };
+  const blob = { gathering: cache.gathering, me: cache.me, avatar: cache.avatar, trips: cache.trips };
   localStorage.setItem(LOCAL_KEY, JSON.stringify(blob));
 }
 
