@@ -290,22 +290,29 @@ async function runRoute() {
   const readout = document.querySelector("#readout");
   if (!hasEnds() || !map) { legs = []; if (readout) readout.innerHTML = readoutHtml(null); return; }
 
-  const waypoints = trip.type === "loop" ? [...trip.stops, trip.destination] : trip.stops;
-  const destination = trip.type === "loop" ? trip.origin : trip.destination;
-
   try {
     readout?.classList.add("is-loading");
-    const r = await maps.computeRoute({ origin: trip.origin, destination, waypoints });
-    trip.route = { distanceMeters: r.distanceMeters, durationSeconds: r.durationSeconds };
-    legs = r.legs || [];
+    let segments;
+    if (trip.type === "loop") {
+      // Two calls: origin→stops→turnaround (solid) and turnaround→origin (ghost).
+      const out = await maps.computeRoute({ origin: trip.origin, destination: trip.destination, waypoints: trip.stops });
+      const back = await maps.computeRoute({ origin: trip.destination, destination: trip.origin, waypoints: [] });
+      legs = [...(out.legs || []), ...(back.legs || [])];
+      trip.route = {
+        distanceMeters: out.distanceMeters + back.distanceMeters,
+        durationSeconds: out.durationSeconds + back.durationSeconds,
+      };
+      segments = [{ path: out.path, ghost: false }, { path: back.path, ghost: true }];
+    } else {
+      const r = await maps.computeRoute({ origin: trip.origin, destination: trip.destination, waypoints: trip.stops });
+      legs = r.legs || [];
+      trip.route = { distanceMeters: r.distanceMeters, durationSeconds: r.durationSeconds };
+      segments = [{ path: r.path, ghost: false }];
+    }
 
     lastPoints = routePoints();
     clearRoute();
-    clearRoute = maps.drawRoute(
-      map,
-      { path: r.path, legPaths: r.legPaths, points: lastPoints, isLoop: trip.type === "loop" },
-      { onPointClick: focusStopCard, onPointDrag: handlePinDrag },
-    );
+    clearRoute = maps.drawRoute(map, { segments, points: lastPoints }, { onPointClick: focusStopCard, onPointDrag: handlePinDrag });
     if (readout) readout.innerHTML = readoutHtml(trip.route);
     renderTimeline(document.querySelector(".planner")?.parentElement || document);
   } catch (e) {

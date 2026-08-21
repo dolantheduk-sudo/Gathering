@@ -182,38 +182,29 @@ const CAT_COLOR = {
   fun: "#8B57E6", gas: "#F5B52D", shop: "#17B0A3",
 };
 
-// Dash + arrow decorations for a solid route leg.
-// (3 = google.maps.SymbolPath.FORWARD_CLOSED_ARROW — used as a literal so this
-//  constant can be built before the Maps SDK has loaded.)
-const SOLID_ICONS = [
-  { icon: { path: "M 0,-1 0,1", strokeOpacity: 1, strokeColor: "#F5B52D", strokeWeight: 4, scale: 3 }, offset: "0", repeat: "16px" },
-  { icon: { path: 3, scale: 2.6, strokeColor: "#C9702F", strokeWeight: 1, fillColor: "#C9702F", fillOpacity: 1 }, offset: "6%", repeat: "170px" },
-];
-// Faint thin dashes for the "way home" return leg — no arrows.
-const GHOST_ICONS = [
-  { icon: { path: "M 0,-1 0,1", strokeOpacity: 0.35, strokeColor: "#E5722F", strokeWeight: 2, scale: 2 }, offset: "0", repeat: "13px" },
-];
-
 let _infoWin = null;
 
 // Draw the route + pins. Returns a cleanup handle.
-//  opts.onPointClick(point)         → marker click (map↔list sync)
-//  opts.onPointDrag(point, latLng)  → marker dragged to a new spot
-export function drawRoute(map, { path, legPaths, points, isLoop }, opts = {}) {
+//  segments: [{ path:[{lat,lng}], ghost:bool }] — solid vs faded "way home"
+//  opts.onPointClick(point) / opts.onPointDrag(point, latLng)
+export function drawRoute(map, { segments, path, points }, opts = {}) {
   const overlays = [];
+  const dash = (opacity, color, weight, scale, rep) =>
+    ({ icon: { path: "M 0,-1 0,1", strokeOpacity: opacity, strokeColor: color, strokeWeight: weight, scale }, offset: "0", repeat: rep });
+  // Arrow symbol built here (after the SDK is loaded) so it renders.
+  const arrow = { icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 3, strokeColor: "#B85C1E", strokeWeight: 1, fillColor: "#B85C1E", fillOpacity: 1 }, offset: "8%", repeat: "150px" };
+  const solidIcons = [dash(1, "#F5B52D", 4, 3, "16px"), arrow];
+  const ghostIcons = [dash(0.45, "#E5722F", 2, 2, "13px")];
+
   const addLine = (pts, ghost) => {
     if (!pts?.length) return;
     overlays.push(new google.maps.Polyline({
       path: pts, geodesic: true, strokeOpacity: 0,
-      icons: ghost ? GHOST_ICONS : SOLID_ICONS, map, zIndex: ghost ? 1 : 2,
+      icons: ghost ? ghostIcons : solidIcons, map, zIndex: ghost ? 1 : 2,
     }));
   };
-
-  if (legPaths?.length) {
-    legPaths.forEach((lp, i) => addLine(lp, isLoop && i === legPaths.length - 1));
-  } else if (path?.length) {
-    addLine(path, false);   // fallback: one solid line, no ghosting
-  }
+  const segs = segments || (path ? [{ path, ghost: false }] : []);
+  segs.forEach((s) => addLine(s.path, s.ghost));
 
   if (!_infoWin) _infoWin = new google.maps.InfoWindow();
 

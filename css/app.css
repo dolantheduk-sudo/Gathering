@@ -7,7 +7,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Space+Mono:wght@400;700&display=swap');
 
 :root {
-  --paper:   #faf9f3;
+  --paper:   #edf2e0;
   --card:    #ffffff;
   --ink:     #1b2532;
   --slate:   #66707d;
@@ -520,3 +520,16 @@ body {
 /* Buttons get a hair sunnier on hover */
 .btn--solid { background: linear-gradient(135deg, var(--pine), #35b06f); }
 .readout { border-top-color: var(--yellow); }
+
+/* ── Stronger green/gold canvas (override earlier glows) ───── */
+body {
+  background:
+    radial-gradient(900px 480px at 106% -6%, rgba(245,181,45,.28), transparent 62%),
+    radial-gradient(840px 500px at -8% -4%, rgba(47,158,99,.30), transparent 60%),
+    radial-gradient(780px 540px at 50% 122%, rgba(245,181,45,.18), transparent 62%),
+    var(--paper);
+  background-attachment: fixed;
+}
+/* Cards pop cleanly against the green canvas */
+.trip-card, .planner__panel, .jar, .onboard__card, .readout, .day--read { box-shadow: 0 1px 2px rgba(27,37,50,.05), 0 10px 30px rgba(31,122,73,.10); }
+.topbar { background: linear-gradient(180deg, #ffffff, #f4f8ec); }
