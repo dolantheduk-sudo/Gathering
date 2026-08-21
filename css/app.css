@@ -800,3 +800,8 @@ body {
 .ev__name { overflow: visible; text-overflow: clip; white-space: normal; min-width: 0; }
 .detail .timeline { padding: 1.5rem 2.25rem; }
 .ev__eta, .day-head__drive { padding-left: .5rem; }
+
+/* BUGFIX: the detail-page jar/checklist were position:static, so their
+   decorative ::after gold frame escaped and bordered the whole viewport.
+   Anchoring them keeps the frame inside the panel where it belongs. */
+.detail__side .jar { position: relative; }
