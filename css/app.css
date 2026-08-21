@@ -762,3 +762,22 @@ body { background-attachment: scroll; }
 .cmt-in, .ev__notes, .ev__mini-in { min-width: 0; }
 .ev__top { padding-right: .1rem; }
 .day-head { padding-right: .1rem; }
+
+/* ═══════════════════════════════════════════════════════════
+   FINAL background fix — kill the fixed-seam gold line for good.
+   Texture scrolls with the page; glows sit on ONE fixed backdrop
+   layer (a single smooth paint can't seam into a line).
+   ═══════════════════════════════════════════════════════════ */
+body {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M24 2L46 24L24 46L2 24Z' fill='none' stroke='%231a6045' stroke-width='0.9' opacity='0.20'/%3E%3C/svg%3E") repeat,
+    var(--paper) !important;
+  background-attachment: scroll !important;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(900px 480px at 106% -6%, rgba(201,162,39,.28), transparent 62%),
+    radial-gradient(840px 500px at -8% -4%, rgba(31,107,79,.28), transparent 60%),
+    radial-gradient(760px 520px at 50% 122%, rgba(156,90,44,.14), transparent 62%);
+}
