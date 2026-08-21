@@ -6,7 +6,7 @@ import { config } from "./config.js";
 import * as maps from "./providers/maps-google.js";
 import * as store from "./store.js";
 import { fmtMiles, fmtDuration, fmtTime, fmtDate, debounce, el } from "./util.js";
-import { CATEGORIES, CATEGORY_ORDER, catDef, defaultStay, buildTimeline, ENDPOINT_ICONS } from "./events.js";
+import { CATEGORIES, CATEGORY_ORDER, catDef, defaultStay, buildTimeline, ENDPOINT_ICONS, canSeeStop } from "./events.js";
 
 let map = null;
 let clearRoute = () => {};
@@ -325,13 +325,18 @@ async function runRoute() {
 }
 
 function routePoints() {
+  const me = store.getSession().me;
   const tl = buildTimeline(trip, legs);
   const etaById = {};
   tl.days.forEach((d) => d.items.forEach((it) => { etaById[it.id] = it.etaMin; }));
   const eta = (id) => (etaById[id] != null ? fmtTime(etaById[id]) : "");
 
   const pts = [{ ...trip.origin, role: "origin", label: trip.origin.label, eta: eta("__origin") }];
-  trip.stops.forEach((s, i) => pts.push({ ...s, role: "stop", index: i + 1, label: s.label, stopId: s.id, category: s.category, eta: eta(s.id) }));
+  trip.stops.forEach((s, i) => {
+    const hidden = !canSeeStop(s, me);
+    pts.push({ lat: s.lat, lng: s.lng, role: "stop", index: i + 1, stopId: s.id, hidden,
+      label: hidden ? "Surprise" : s.label, category: hidden ? null : s.category, eta: hidden ? "" : eta(s.id) });
+  });
   pts.push({ ...trip.destination, role: trip.type === "loop" ? "apex" : "destination", label: trip.destination.label, eta: eta("__dest") });
   return pts;
 }

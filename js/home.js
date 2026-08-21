@@ -4,6 +4,8 @@
 // ─────────────────────────────────────────────────────────────
 
 import * as store from "./store.js";
+import * as maps from "./providers/maps-google.js";
+import { config } from "./config.js";
 import { renderJar } from "./jar.js";
 import { fmtMiles, fmtDuration, fmtDate, fmtTime, countdownLabel } from "./util.js";
 import { buildTimeline, catDef, ENDPOINT_ICONS, REACTIONS, canSeeStop } from "./events.js";
@@ -86,6 +88,7 @@ export function renderTrip(root, id) {
           <button class="btn btn--quiet" data-del="${t.id}">Delete</button>
         </div>
       </header>
+      ${t.origin && t.destination && config.GOOGLE_MAPS_API_KEY ? `<div id="detail-map" class="map map--detail"></div>` : ""}
       <div class="detail__cols">
         <div class="timeline">${tl.days.map((d) => readDay(d, me)).join("")}</div>
         <div class="detail__side">
@@ -97,6 +100,7 @@ export function renderTrip(root, id) {
 
   renderJar(root.querySelector("#jar-slot"), t.id);
   wireDetail(root, id, me);
+  drawDetailMap(root.querySelector("#detail-map"), t, me);
 }
 
 function readDay(day, me) {
@@ -206,6 +210,40 @@ function wireDetail(root, id, me) {
   };
   root.querySelectorAll("[data-check]").forEach((cb) => cb.onchange = () => { store.toggleChecklistItem(id, cb.dataset.check); renderTrip(root, id); });
   root.querySelectorAll("[data-check-rm]").forEach((b) => b.onclick = () => { store.removeChecklistItem(id, b.dataset.checkRm); renderTrip(root, id); });
+}
+
+// Read-only route map on the trip detail page. Recomputes the route (a couple
+// of Google calls) each time the trip opens — fine at hobby scale.
+async function drawDetailMap(el, trip, me) {
+  if (!el) return;
+  try {
+    await maps.loadMaps(config.GOOGLE_MAPS_API_KEY);
+    const map = maps.createMap(el, config.DEFAULT_CENTER, config.DEFAULT_ZOOM);
+    let segments;
+    if (trip.type === "loop") {
+      const out = await maps.computeRoute({ origin: trip.origin, destination: trip.destination, waypoints: trip.stops });
+      const back = await maps.computeRoute({ origin: trip.destination, destination: trip.origin, waypoints: [] });
+      segments = [{ path: out.path, ghost: false }, { path: back.path, ghost: true }];
+    } else {
+      const r = await maps.computeRoute({ origin: trip.origin, destination: trip.destination, waypoints: trip.stops });
+      segments = [{ path: r.path, ghost: false }];
+    }
+    const tl = buildTimeline(trip, trip.legs || []);
+    const etaById = {};
+    tl.days.forEach((d) => d.items.forEach((it) => { etaById[it.id] = it.etaMin; }));
+    const pts = [{ ...trip.origin, role: "origin", label: trip.origin.label, eta: etaById["__origin"] != null ? fmtTime(etaById["__origin"]) : "" }];
+    trip.stops.forEach((s, i) => {
+      const hidden = !canSeeStop(s, me);
+      pts.push({ lat: s.lat, lng: s.lng, role: "stop", index: i + 1, hidden,
+        label: hidden ? "Surprise" : s.label, category: hidden ? null : s.category,
+        eta: hidden ? "" : (etaById[s.id] != null ? fmtTime(etaById[s.id]) : "") });
+    });
+    pts.push({ ...trip.destination, role: trip.type === "loop" ? "apex" : "destination", label: trip.destination.label, eta: etaById["__dest"] != null ? fmtTime(etaById["__dest"]) : "" });
+    maps.drawRoute(map, { segments, points: pts }, {});   // read-only: no drag, no card-focus
+  } catch (e) {
+    console.error("Detail map error:", e?.message || e);
+    el.remove();
+  }
 }
 
 function escapeHtml(s = "") { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }

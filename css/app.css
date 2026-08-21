@@ -533,3 +533,60 @@ body {
 /* Cards pop cleanly against the green canvas */
 .trip-card, .planner__panel, .jar, .onboard__card, .readout, .day--read { box-shadow: 0 1px 2px rgba(27,37,50,.05), 0 10px 30px rgba(31,122,73,.10); }
 .topbar { background: linear-gradient(180deg, #ffffff, #f4f8ec); }
+
+/* ═══════════════════════════════════════════════════════════
+   1920s Grand Hotel — emerald, gold, terracotta, parchment
+   ═══════════════════════════════════════════════════════════ */
+:root {
+  --paper:   #ece3cb;   /* warm parchment */
+  --card:    #f7f1e0;   /* soft ivory */
+  --ink:     #26231c;   /* warm near-black */
+  --slate:   #7a6f5c;   /* taupe */
+  --line:    #d8cbac;   /* tan hairline */
+  --pine:    #1f6b4f;   /* emerald */
+  --pine-deep:#14503a;
+  --route:   #c9a227;   /* gold */
+  --clay:    #9c5a2c;   /* terracotta */
+  --blue:    #35617f;
+  --purple:  #7b4f8c;
+  --yellow:  #c9a227;
+  --teal:    #4a8c6a;
+  --c-sight: #1f6b4f; --c-food: #b5652f; --c-sleep: #35617f;
+  --c-fun: #7b4f8c;   --c-gas: #c9a227;  --c-shop: #4a8c6a;
+}
+body {
+  background:
+    radial-gradient(900px 480px at 106% -6%, rgba(201,162,39,.32), transparent 62%),
+    radial-gradient(840px 500px at -8% -4%, rgba(31,107,79,.30), transparent 60%),
+    radial-gradient(760px 520px at 50% 122%, rgba(156,90,44,.16), transparent 62%),
+    var(--paper);
+  background-attachment: fixed;
+}
+.topbar { background: linear-gradient(180deg, #f7f1e0, #efe6cf); border-bottom: 1px solid var(--line); }
+.topbar::after { background: linear-gradient(90deg, var(--pine), var(--route) 42%, var(--clay) 72%, var(--pine)); height: 3px; }
+.wordmark { background: linear-gradient(92deg, var(--pine), var(--route) 82%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: .01em; }
+.wordmark::before { -webkit-text-fill-color: var(--route); }
+.eyebrow { color: var(--pine-deep); letter-spacing: .16em; }
+.btn--solid { background: linear-gradient(135deg, var(--pine), #2a8a63); }
+.btn--solid:hover { background: linear-gradient(135deg, var(--pine-deep), var(--pine)); }
+.tabs a.is-active { background: var(--pine); color: #fff; }
+.readout { background: var(--ink); border-top: 3px solid var(--route); }
+.home__title::after { background: linear-gradient(90deg, var(--route), var(--pine)); }
+.jar__saved { background: linear-gradient(92deg, var(--pine), var(--route)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.jar__bar span { background: linear-gradient(90deg, var(--pine), var(--route)); }
+.rx.is-on { background: color-mix(in srgb, var(--route) 18%, var(--card)); border-color: var(--route); }
+.rx.is-on span { color: var(--clay); }
+
+/* Card accents lean green / gold / brown */
+.trip-card { --accent: var(--pine); }
+.trip-card:nth-child(6n+2) { --accent: var(--route); }
+.trip-card:nth-child(6n+3) { --accent: var(--clay); }
+.trip-card:nth-child(6n+4) { --accent: var(--teal); }
+.trip-card:nth-child(6n+5) { --accent: var(--pine-deep); }
+.trip-card:nth-child(6n+6) { --accent: var(--purple); }
+.trip-card, .planner__panel, .jar, .onboard__card, .readout, .day--read {
+  box-shadow: 0 1px 2px rgba(38,35,28,.07), 0 10px 30px rgba(31,107,79,.12);
+}
+
+/* Read-only route map on the trip detail page */
+.map--detail { height: 360px; margin: .4rem 0 1.5rem; }

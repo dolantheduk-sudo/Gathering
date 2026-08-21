@@ -59,9 +59,19 @@ export function createMap(el, center, zoom) {
     center, zoom,
     disableDefaultUI: true,
     zoomControl: true,
+    fullscreenControl: true,
+    gestureHandling: "greedy",   // wheel-zoom directly when hovering the map
     clickableIcons: false,
     styles: MAP_STYLE,
   });
+}
+
+// Refit the map to a set of points (for a "recenter" button).
+export function fitPoints(map, points) {
+  if (!points?.length) return;
+  const b = new google.maps.LatLngBounds();
+  points.forEach((p) => b.extend({ lat: p.lat, lng: p.lng }));
+  map.fitBounds(b, 64);
 }
 
 // Create a Place Autocomplete widget inside a container element, and call
@@ -151,78 +161,104 @@ export async function computeRoute({ origin, destination, waypoints = [] }) {
     durationSeconds: Math.round((l.durationMillis || 0) / 1000),
   }));
 
+  // Per-leg geometry (if the SDK exposes it) lets us ghost the return leg
+  // and add arrows per segment. Falls back to the whole-route path.
+  const toXY = (p) => ({ lat: typeof p.lat === "function" ? p.lat() : p.lat, lng: typeof p.lng === "function" ? p.lng() : p.lng });
+  const legPathsRaw = (route.legs || []).map((l) => (l.path || []).map(toXY));
+  const legPaths = legPathsRaw.length && legPathsRaw.every((lp) => lp.length) ? legPathsRaw : null;
+
   return {
     distanceMeters: route.distanceMeters || 0,
     durationSeconds: Math.round((route.durationMillis || 0) / 1000),
     path,
     legs,
+    legPaths,
   };
 }
 
-// Draw the amber dashed "route" polyline + pins. Returns a cleanup handle.
-// opts.onPointClick(point) fires when a marker is clicked (for map↔list sync).
-export function drawRoute(map, { path, points }, opts = {}) {
+// Category → pin fill color (matches the timeline), 1920s-hotel palette.
+const CAT_COLOR = {
+  sight: "#1F6B4F", food: "#B5652F", sleep: "#35617F",
+  fun: "#7B4F8C", gas: "#C9A227", shop: "#4A8C6A",
+};
+
+let _infoWin = null;
+
+// Draw the route + pins. Returns a cleanup handle.
+//  segments: [{ path:[{lat,lng}], ghost:bool }] — solid vs faded "way home"
+//  opts.onPointClick(point) / opts.onPointDrag(point, latLng)
+export function drawRoute(map, { segments, path, points }, opts = {}) {
   const overlays = [];
+  const arrow = { icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 3, strokeColor: "#5c4a1e", strokeWeight: 1, fillColor: "#5c4a1e", fillOpacity: 1 }, offset: "10%", repeat: "150px" };
 
-  if (path?.length) {
-    const line = new google.maps.Polyline({
-      path,
-      geodesic: true,
-      strokeOpacity: 0,          // we only want the dashes
-      icons: [{
-        icon: { path: "M 0,-1 0,1", strokeOpacity: 1, strokeColor: "#F5B52D", strokeWeight: 4, scale: 3 },
-        offset: "0", repeat: "16px",
-      }],
-      map,
-    });
-    overlays.push(line);
-  }
+  const addLine = (pts, ghost) => {
+    if (!pts?.length) return;
+    overlays.push(new google.maps.Polyline({
+      path: pts, geodesic: true,
+      strokeColor: ghost ? "#9c7b2e" : "#C9A227",   // gold; faded for the drive home
+      strokeOpacity: ghost ? 0.4 : 0.95,
+      strokeWeight: ghost ? 3 : 5,
+      icons: ghost ? [] : [arrow],
+      map, zIndex: ghost ? 1 : 2,
+    }));
+  };
+  const segs = segments || (path ? [{ path, ghost: false }] : []);
+  segs.forEach((s) => addLine(s.path, s.ghost));
 
-  (points || []).forEach((pt, i) => {
-    const kind = pt.role; // "origin" | "stop" | "apex" | "destination"
+  if (!_infoWin) _infoWin = new google.maps.InfoWindow();
+
+  (points || []).forEach((pt) => {
+    const hidden = !!pt.hidden;   // surprise stop the viewer can't see
     const marker = new google.maps.Marker({
       position: { lat: pt.lat, lng: pt.lng },
       map,
-      label: kind === "stop" ? { text: String(pt.index), color: "#17211F", fontFamily: "Space Mono, monospace", fontSize: "12px", fontWeight: "700" } : null,
-      icon: pinIcon(kind),
-      title: pt.label,
+      draggable: !!opts.onPointDrag && !hidden,
+      label: (pt.role === "stop" && !hidden) ? { text: String(pt.index), color: "#fff", fontFamily: "Space Mono, monospace", fontSize: "11px", fontWeight: "700" } : null,
+      icon: pinIcon(pt),
+      title: hidden ? "Surprise" : pt.label,
+      zIndex: 5,
     });
-    if (opts.onPointClick) marker.addListener("click", () => opts.onPointClick(pt));
+    if (!hidden) {   // surprise pins are inert — clicking must not reveal them
+      marker.addListener("click", () => {
+        _infoWin.setContent(`<div style="font:600 13px/1.3 'DM Sans',sans-serif;color:#26231c">${escapeAttr(pt.label)}${pt.eta ? `<br><span style="font-family:'Space Mono',monospace;color:#14503a">${pt.eta}</span>` : ""}</div>`);
+        _infoWin.open(map, marker);
+        opts.onPointClick?.(pt);
+      });
+      if (opts.onPointDrag) marker.addListener("dragend", (e) => opts.onPointDrag(pt, e.latLng));
+    }
     overlays.push(marker);
   });
 
-  if (points?.length) {
-    const bounds = new google.maps.LatLngBounds();
-    points.forEach((p) => bounds.extend({ lat: p.lat, lng: p.lng }));
-    map.fitBounds(bounds, 64);
-  }
-
+  fitPoints(map, points);
   return () => overlays.forEach((o) => o.setMap(null));
 }
 
-function pinIcon(kind) {
-  const fill = kind === "origin" ? "#2F9E63"
-    : kind === "destination" ? "#1F7A49"
-    : kind === "apex" ? "#E5722F"
-    : "#FBFAF5";
-  const stroke = kind === "stop" ? "#F5B52D" : "#1B2532";
+function pinIcon(pt) {
+  const kind = pt.role;
+  if (pt.hidden) return { path: google.maps.SymbolPath.CIRCLE, scale: 11, fillColor: "#7b4f8c", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2.5 };
+  const fill = kind === "origin" ? "#1F6B4F"
+    : kind === "destination" ? "#14503A"
+    : kind === "apex" ? "#B5652F"
+    : CAT_COLOR[pt.category] || "#1F6B4F";
   return {
     path: google.maps.SymbolPath.CIRCLE,
-    scale: kind === "stop" ? 10 : 12,
+    scale: kind === "stop" ? 11 : 13,
     fillColor: fill, fillOpacity: 1,
-    strokeColor: stroke, strokeWeight: 3,
+    strokeColor: "#f6efdc", strokeWeight: 2.5,
   };
 }
 
-// Minimal, muted map style so our amber route is the loudest thing on screen.
+function escapeAttr(s = "") { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+// Warm parchment map style so the gold route reads like ink on old paper.
 const MAP_STYLE = [
-  { elementType: "geometry", stylers: [{ color: "#eef0ea" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#6e7b76" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#eef0ea" }] },
+  { elementType: "geometry", stylers: [{ color: "#efe7d0" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#8a7c5f" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#efe7d0" }] },
   { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
   { featureType: "poi", stylers: [{ visibility: "off" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#dfe3db" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#cfd6cd" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#e2d8bd" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#d8caa6" }] },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#c3d3cc" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#bcccb4" }] },
 ];
